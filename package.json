@@ -3,10 +3,8 @@
   "description": "",
   "keywords": [],
   "author": "https://github.com/rvajustin",
-  "version": "0.0.0",
-  "scripts": {
-
-  },
+  "version": "0.1.0",
+  "scripts": {},
   "type": "module",
   "license": "UNLICENSED",
   "packageManager": "yarn@1.22.19",
