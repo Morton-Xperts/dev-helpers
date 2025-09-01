@@ -1,0 +1,85 @@
+name: 'Rosie Version Bump'
+description: |
+  You must provide either the `package-file` or `version` parameter to indicate the current version of your
+  artifact
+
+inputs:
+  git-email:
+    description: 'Configured email address for git user'
+    default: 'github-actions@github.com'
+    required: false
+  git-name:
+    description: 'Configured name for git user'
+    default: 'github-actions'
+    required: false
+  github-token:
+    description: |
+      GitHub token for pushing to the registry
+    required: true
+  package-file:
+    description: |
+      Path to the package.json file
+    required: false
+    default: 'package.json'
+
+runs:
+  using: "composite"
+
+  steps:
+    - name: 'Configure Git'
+      shell: bash
+      env:
+        COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+      run: |
+        git config --global user.email "${{ inputs.git-email }}"
+        git config --global user.name "${{ inputs.git-name }}"
+        git config --global push.followTags true
+
+    - name: 'Increment Package Version'
+      shell: bash
+      env:
+        COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+      run: |
+        if [[ $COMMIT_MESSAGE == major* ]] || [[ $COMMIT_MESSAGE == refactor* ]]; then
+          yarn version --major --no-git-tag-version --no-commit-hooks
+        elif [[ $COMMIT_MESSAGE == minor* ]] || [[ $COMMIT_MESSAGE == feat* ]]; then
+          yarn version --minor --no-git-tag-version --no-commit-hooks
+        else
+          yarn version --patch --no-git-tag-version --no-commit-hooks
+        fi
+
+    - name: 'Commit new Package Version'
+      shell: bash
+      run: |
+        PACKAGE_VERSION=$(jq -r ".version" ${{ inputs.package-file }})
+        git commit -a -m "skip ci: version incremented to v$PACKAGE_VERSION [skip ci]"
+
+    - name: 'Tag Sources'
+      shell: bash
+      run: |
+        PACKAGE_VERSION=$(jq -r ".version" ${{ inputs.package-file }})
+        git tag -a "v$PACKAGE_VERSION" -m "skip ci: version tagged as v$PACKAGE_VERSION [skip ci]"
+
+    - name: 'Push Changes to Git'
+      shell: bash
+      run: |
+        git push origin HEAD:${{ github.ref }} --force
+
+    - name: 'Get Current Version'
+      id: version
+      shell: bash
+      run: |
+        PACKAGE_VERSION=$(jq -r ".version" ${{ inputs.package-file }})
+        echo "Package version is: $PACKAGE_VERSION"
+        echo "version=$(echo $PACKAGE_VERSION)" >> $GITHUB_OUTPUT
+
+    - name: 'Create Release'
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+      with:
+        tag_name: v${{ steps.version.outputs.version }}
+        release_name: Release ${{ steps.version.outputs.version }}
+        draft: false
+        prerelease: false

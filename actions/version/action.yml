@@ -1,0 +1,28 @@
+name: 'Get Version'
+description: |
+  Gets the current package version from the `package.json` file 
+
+inputs:
+  package-file:
+    description: |
+      To infer the last known version by reading a package.json file, supply the full path to the package.json file
+    default: 'package.json'
+    required: false
+
+outputs:
+  version:
+    description:  |
+      The current version of the package (in semantic versioning format [x.x.x])
+    value: ${{ steps.get-package-version.outputs.version }}
+
+runs:
+  using: "composite"
+
+  steps:
+    - id: get-package-version
+      name: 'Get Package Version'
+      shell: bash
+      run: |
+        PACKAGE_VERSION=$(jq -r ".version" ${{ inputs.package-file }})
+        echo "Package version is: $PACKAGE_VERSION"
+        echo "version=$(echo $PACKAGE_VERSION)" >> $GITHUB_OUTPUT

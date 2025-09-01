@@ -1,0 +1,43 @@
+name: 'Build'
+
+on:
+  push:
+    branches:
+      - 'main'
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+
+    permissions:
+      contents: write
+      packages: write
+
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
+    steps:
+      - name: 'Download Source'
+        uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ vars.NODE_VERSION }}
+          cache: 'yarn'
+
+      - name: 'Increment Package Version'
+        uses: './actions/version-bump'
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 'Get New Version'
+        id: version
+        uses: './actions/version'
