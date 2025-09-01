@@ -9,6 +9,8 @@ brew install just # command runner
 brew install codex # AI pair programmer
 brew install docker-compose # multi-container Docker applications
 brew install nvm # Node Version Manager
+brew install pyenv # Python Version Manager
+brew install pyenv-virtualenv # Python virtual environments
 brew install rbenv # Ruby Version Manager
 brew install gh # GitHub CLI
 brew install node # Node.js
