@@ -16,6 +16,8 @@ brew install gh # GitHub CLI
 brew install node # Node.js
 brew install watchman # file watching service
 brew install yarn # package manager for JavaScript
+brew install azure-cli # Azure CLI
+brew install react-native-cli # React Native CLI
 
 # Install SDKMAN
 curl -s "https://get.sdkman.io" | bash
@@ -34,3 +36,7 @@ rbenv install 3.2.2
 # Set global Ruby version
 rbenv global 3.2.2
 
+# Install node packages
+npm install -g eas-cli # Expo Application Services CLI
+npm install -g expo-cli # Expo CLI
+npm install -g firebase-tools # Firebase CLI
