@@ -4,7 +4,9 @@
   "keywords": [],
   "author": "https://github.com/rvajustin",
   "version": "0.1.0",
-  "scripts": {},
+  "scripts": {
+    "setup": "sh ./scripts/setup.sh"
+  },
   "type": "module",
   "license": "UNLICENSED",
   "packageManager": "yarn@1.22.19",
