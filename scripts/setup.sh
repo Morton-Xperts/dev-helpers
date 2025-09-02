@@ -40,3 +40,4 @@ rbenv global 3.2.2
 npm install -g eas-cli # Expo Application Services CLI
 npm install -g expo-cli # Expo CLI
 npm install -g firebase-tools # Firebase CLI
+npm install -g cross-env
