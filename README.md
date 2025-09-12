@@ -1,4 +1,4 @@
-# Dev Helpers
+# Xperts Dev Helpers
 
 Reusable developer helpers for local automation, task running, and CI versioning. This repo provides Justfile-style 
 recipes, simple scripts, and GitHub Actions to streamline multi-stack projects.  The intention of this repository is to
