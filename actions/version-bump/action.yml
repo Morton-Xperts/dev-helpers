@@ -132,7 +132,7 @@ runs:
       id: version
       shell: bash
       run: |
-        PACKAGE_VERSION=$(python3 scripts/bump-version.py --package-file "${{ inputs.package-file }}" --print-only)
+        PACKAGE_VERSION=$(jq -r ".version" ${{ inputs.package-file }})
         echo "Package version is: $PACKAGE_VERSION"
         echo "version=$(echo $PACKAGE_VERSION)" >> $GITHUB_OUTPUT
 
