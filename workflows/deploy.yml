@@ -1,0 +1,187 @@
+name: deploy
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: 'Version to Release'
+        required: true
+        type: string
+      environment:
+        description: 'Environment to Deploy'
+        required: true
+        type: string
+        default: dev
+      upload_to_google_play:
+        description: 'Whether to upload Android bundle to Google Play'
+        required: false
+        type: boolean
+        default: false
+      package_name:
+        description: 'ApplicationId/package name'
+        required: false
+        type: string
+        default: 'com.polished_truth_42233'
+      priority:
+        description: 'In-app update priority (2 default)'
+        required: false
+        type: string
+        default: '2'
+
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to Release'
+        required: true
+        type: string
+      environment:
+        description: 'Environment to Deploy'
+        required: true
+        type: string
+      upload_to_google_play:
+        description: 'Whether to upload Android bundle to Google Play'
+        required: false
+        type: boolean
+        default: false
+      package_name:
+        description: 'Android applicationId / package name for Google Play'
+        required: false
+        type: string
+      priority:
+        description: 'In-app update priority (2 default)'
+        required: false
+        type: string
+        default: '2'
+
+env:
+  AZURE_REGISTRY_LOGIN_SERVER: ${{ vars.CUSTOMER_AZURE_REGISTRY_NAME }}.azurecr.io
+  IMAGE_NAME: ${{ vars.AZURE_APP_NAME }}
+
+jobs:
+
+  backend:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    permissions:
+      contents: write
+      id-token: write
+
+    steps:
+      - name: 'Download Source'
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: v${{ inputs.version }}
+
+      - name: 'Get Build Args'
+        id: get-build-args
+        uses: './actions/get-build-args'
+        with:
+          environment: ${{ inputs.environment }}
+
+      - name: 'Deploy App'
+        uses: './actions/deploy'
+        with:
+          environment: ${{ inputs.environment }}
+          version: ${{ inputs.version }}
+          acr-login-server: ${{ vars.CUSTOMER_AZURE_REGISTRY_NAME }}.azurecr.io
+          acr-username: ${{ secrets.CUSTOMER_ACR_USERNAME }}
+          acr-password: ${{ secrets.CUSTOMER_ACR_PASSWORD }}
+          image-name: ${{ vars.AZURE_RESOURCE_GROUP_NAME }}
+          build-args: |
+            ${{ secrets.BUILD_ARGS }}
+            ${{ steps.env_build_args.outputs.env_file_build_args }}
+          azure-credentials: ${{ secrets.CUSTOMER_AZURE_CREDENTIALS }}
+          azure-app-name: ${{ vars.AZURE_APP_NAME }}
+          azure-resource-group-name: ${{ vars.AZURE_RESOURCE_GROUP_NAME }}
+
+  android-bundle:
+    runs-on: macos-latest
+    environment: android
+
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: 'Checkout'
+        uses: actions/checkout@v3
+        with:
+          ref: v${{ inputs.version }}
+
+      - name: 'Android Build'
+        uses: ./actions/android-build
+        with:
+          env: ${{ inputs.environment == 'staging' && 'staging' || 'production' }}
+
+  android-upload:
+    if: inputs.environment == 'production' && inputs.upload_to_google_play == true
+    runs-on: macos-latest
+    environment: google-play
+    needs: [android-bundle]
+
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Upload to Google Play
+        uses: ./actions/android-upload
+        with:
+          service-account-json: ${{ secrets.SERVICE_ACCOUNT_JSON }}
+          package-name: ${{ inputs.package_name }}
+          track: internal
+          status: completed
+          in-app-update-priority: ${{ inputs.priority }}
+          whats-new-directory: whats-new
+          changes-not-sent-for-review: 'false'
+
+#  ios-bundle:
+#    runs-on: macos-latest
+#    environment: ios
+#
+#    permissions:
+#      contents: write
+#      packages: write
+#
+#    steps:
+#      - name: Checkout
+#        uses: actions/checkout@v3
+#        with:
+#          ref: ${{ inputs.ref }}
+#
+#      - name: iOS build
+#        uses: ./actions/ios-build
+#        with:
+#          node-version: '18'
+#          env: ${{ inputs.testing && 'staging' || 'production' }}
+#          certificate-base64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+#          p12-password: ${{ secrets.P12_PASSWORD }}
+#          provisioning-profiles-base64: ${{ secrets.PROVISION_PROFILES_BASE64 }}
+#          keychain-password: ${{ secrets.KEYCHAIN_PASSWORD }}
+
+#  ios-upload:
+#    runs-on: macos-latest
+#    environment: apple-app-store
+#    needs: [ios-bundle]
+#
+#    permissions:
+#      contents: write
+#      packages: write
+#
+#    steps:
+#      - name: Checkout
+#        uses: actions/checkout@v3
+#        with:
+#          ref: ${{ inputs.ref }}
+#
+#      - name: Upload to App Store Connect
+#        if: startsWith(inputs.ref, 'v')
+#        uses: ./actions/ios-upload
+#        with:
+#          username: ${{ secrets.APP_STORE_CONNECT_USERNAME }}
+#          password: ${{ secrets.APP_STORE_CONNECT_PASSWORD }}
+#          artifact-name: 'iOS-app'
+#          artifact-path: 'ios/_artifacts'
+#          ipa-file: ${{ inputs.ipa_file }}
