@@ -1,4 +1,4 @@
-name: 'Rosie Version Bump'
+name: 'Version Bump'
 description: |
   You must provide either the `package-file` or `version` parameter to indicate the current version of your
   artifact
@@ -21,12 +21,26 @@ inputs:
       Path to the package.json file
     required: false
     default: 'package.json'
+  bump-version:
+    description: 'Whether to perform a version bump'
+    required: false
+    default: 'true'
+  commit-and-push:
+    description: 'Whether to commit, tag, and push changes'
+    required: false
+    default: 'true'
+
+outputs:
+  version:
+    description: 'The current package version (semver) from the package file'
+    value: ${{ steps.version.outputs.version }}
 
 runs:
   using: "composite"
 
   steps:
     - name: 'Configure Git'
+      if: ${{ inputs.commit-and-push == 'true' }}
       shell: bash
       env:
         COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
@@ -36,31 +50,80 @@ runs:
         git config --global push.followTags true
 
     - name: 'Increment Package Version'
-      shell: bash
+      if: ${{ inputs.bump-version == 'true' }}
+      shell: python
       env:
         COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        PACKAGE_FILE: ${{ inputs.package-file }}
       run: |
-        if [[ $COMMIT_MESSAGE == major* ]] || [[ $COMMIT_MESSAGE == refactor* ]]; then
-          yarn version --major --no-git-tag-version --no-commit-hooks
-        elif [[ $COMMIT_MESSAGE == minor* ]] || [[ $COMMIT_MESSAGE == feat* ]]; then
-          yarn version --minor --no-git-tag-version --no-commit-hooks
-        else
-          yarn version --patch --no-git-tag-version --no-commit-hooks
-        fi
+        import json, os, pathlib, re, sys
+
+        def decide_level(message: str, default: str = "patch") -> str:
+            msg = (message or "").strip().lower()
+            if msg.startswith("major") or msg.startswith("refactor"):
+                return "major"
+            if msg.startswith("minor") or msg.startswith("feat"):
+                return "minor"
+            return default
+
+        def bump(version: str, level: str) -> str:
+            m = re.match(r"^(\d+)\.(\d+)\.(\d+)(.*)$", version)
+            if not m:
+                print(f"Error: version '{version}' is not in expected x.y.z format", file=sys.stderr)
+                sys.exit(1)
+            major, minor, patch, rest = m.groups()
+            major, minor, patch = int(major), int(minor), int(patch)
+            if level == "major":
+                major += 1; minor = 0; patch = 0; rest = ""
+            elif level == "minor":
+                minor += 1; patch = 0; rest = ""
+            else:
+                patch += 1
+            return f"{major}.{minor}.{patch}{rest}"
+
+        pkg_path = pathlib.Path(os.environ.get("PACKAGE_FILE", "package.json"))
+        commit_message = os.environ.get("COMMIT_MESSAGE", "")
+
+        if not pkg_path.exists():
+            print(f"Error: package file not found: {pkg_path}", file=sys.stderr)
+            sys.exit(1)
+
+        try:
+            data = json.loads(pkg_path.read_text(encoding="utf-8"))
+        except Exception as e:
+            print(f"Error reading JSON from {pkg_path}: {e}", file=sys.stderr)
+            sys.exit(1)
+
+        version = data.get("version")
+        if not isinstance(version, str):
+            print("Error: 'version' not found in package file", file=sys.stderr)
+            sys.exit(1)
+
+        level = decide_level(commit_message)
+        new_version = bump(version, level)
+
+        if new_version != version:
+            data["version"] = new_version
+            pkg_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+        print(new_version)
 
     - name: 'Commit new Package Version'
+      if: ${{ inputs.commit-and-push == 'true' && inputs.bump-version == 'true' }}
       shell: bash
       run: |
         PACKAGE_VERSION=$(jq -r ".version" ${{ inputs.package-file }})
         git commit -a -m "skip ci: version incremented to v$PACKAGE_VERSION [skip ci]"
 
     - name: 'Tag Sources'
+      if: ${{ inputs.commit-and-push == 'true' && inputs.bump-version == 'true' }}
       shell: bash
       run: |
         PACKAGE_VERSION=$(jq -r ".version" ${{ inputs.package-file }})
         git tag -a "v$PACKAGE_VERSION" -m "skip ci: version tagged as v$PACKAGE_VERSION [skip ci]"
 
     - name: 'Push Changes to Git'
+      if: ${{ inputs.commit-and-push == 'true' && inputs.bump-version == 'true' }}
       shell: bash
       run: |
         git push origin HEAD:${{ github.ref }} --force
@@ -69,11 +132,12 @@ runs:
       id: version
       shell: bash
       run: |
-        PACKAGE_VERSION=$(jq -r ".version" ${{ inputs.package-file }})
+        PACKAGE_VERSION=$(python3 scripts/bump-version.py --package-file "${{ inputs.package-file }}" --print-only)
         echo "Package version is: $PACKAGE_VERSION"
         echo "version=$(echo $PACKAGE_VERSION)" >> $GITHUB_OUTPUT
 
     - name: 'Create Release'
+      if: ${{ inputs.commit-and-push == 'true' && inputs.bump-version == 'true' }}
       id: create_release
       uses: actions/create-release@v1
       env:
