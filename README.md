@@ -8,8 +8,18 @@ submodules as a concept, go [here](https://git-scm.com/book/en/v2/Git-Tools-Subm
 
 ## Setting Up the Submodule
 
+If you are using HTTPS:
 ```bash
-git submodule add git@github.com:Morton-Xperts/dev-helpers/.git .xperts/dev-helpers
+git submodule add https://github.com/Morton-Xperts/dev-helpers.git .xperts/dev-helpers
+git submodule sync --recursive
+git submodule update --init --recursive
+```
+
+If you are using SSH:
+```bash
+git submodule add git@github.com:Morton-Xperts/dev-helpers.git .xperts/dev-helpers
+git submodule sync --recursive
+git submodule update --init --recursive
 ```
 
 ## CI & Versioning
