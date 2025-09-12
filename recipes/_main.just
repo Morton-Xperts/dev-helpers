@@ -3,7 +3,7 @@
 # Loads the Node Version Manager configuration
 [private]
 load-nvmrc:
-    zsh ./scripts/load_nvmrc.sh
+    zsh ./scripts/load-nvmrc.sh
 
 # Install dependencies
 install:
