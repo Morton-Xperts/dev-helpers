@@ -73,6 +73,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           ref: v${{ inputs.version }}
+          submodules: true
 
       - name: 'Get Build Args'
         id: get-build-args
@@ -126,6 +127,12 @@ jobs:
       packages: write
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ inputs.ref }}
+          submodules: true
+
       - name: Upload to Google Play
         uses: ./actions/android-upload
         with:
@@ -150,6 +157,7 @@ jobs:
 #        uses: actions/checkout@v3
 #        with:
 #          ref: ${{ inputs.ref }}
+#          submodules: true
 #
 #      - name: iOS build
 #        uses: ./actions/ios-build
@@ -175,6 +183,7 @@ jobs:
 #        uses: actions/checkout@v3
 #        with:
 #          ref: ${{ inputs.ref }}
+#          submodules: true
 #
 #      - name: Upload to App Store Connect
 #        if: startsWith(inputs.ref, 'v')
