@@ -1,0 +1,84 @@
+name: 'Android Upload'
+description: Download Android artifacts and upload to Google Play
+
+inputs:
+  service-account-json:
+    description: 'Service account JSON (plaintext) for Google Play API'
+    required: true
+  package-name:
+    description: 'Android applicationId / package name'
+    required: true
+  track:
+    description: 'Google Play track'
+    required: false
+    default: 'internal'
+  status:
+    description: 'Release status'
+    required: false
+    default: 'completed'
+  in-app-update-priority:
+    description: 'In-app update priority'
+    required: false
+    default: '2'
+  whats-new-directory:
+    description: 'Directory with whatsnew files'
+    required: false
+    default: 'whats-new'
+  changes-not-sent-for-review:
+    description: 'Set changesNotSentForReview flag'
+    required: false
+    default: 'false'
+  app-artifact-path:
+    description: 'Path to place the downloaded Android artifact'
+    required: false
+    default: 'android/_artifacts'
+  debug-symbols-artifact-name:
+    description: 'Name of the Debug Symbols artifact to download'
+    required: false
+    default: 'DebugSymbols'
+  debug-symbols-path:
+    description: 'Path to place the downloaded Debug Symbols'
+    required: false
+    default: 'android/_debugSymbols'
+  release-file:
+    description: 'Release AAB path to upload'
+    required: false
+    default: 'android/_artifacts/app-release.aab'
+  release-name:
+    description: 'Optional release name'
+    required: false
+
+runs:
+  using: 'composite'
+  steps:
+    - name: 'Download Android App Artifact'
+      uses: actions/download-artifact@v4
+      with:
+        name: 'android'
+        path: 'android/_artifacts'
+
+    - name: 'Download Debug Symbols Artifact'
+      uses: actions/download-artifact@v4
+      with:
+        name: 'android-debug-symbols'
+        path: ${{ inputs.debug-symbols-path }}
+
+    - name: 'List Downloaded Artifacts'
+      shell: bash
+      run: |
+        ls -la ${{ inputs.app-artifact-path }} || true
+        ls -la ${{ inputs.debug-symbols-path }} || true
+
+    - name: 'Upload Android Application Bundle'
+      uses: r0adkll/upload-google-play@v1
+      with:
+        serviceAccountJsonPlainText: ${{ inputs.service-account-json }}
+        packageName: ${{ inputs.package-name }}
+        releaseFiles: ${{ inputs.release-file }}
+        track: ${{ inputs.track }}
+        status: ${{ inputs.status }}
+        inAppUpdatePriority: ${{ inputs['in-app-update-priority'] }}
+        whatsNewDirectory: ${{ inputs.whats-new-directory }}
+        debugSymbols: ${{ inputs.debug-symbols-path }}
+        changesNotSentForReview: ${{ inputs.changes-not-sent-for-review }}
+        releaseName: ${{ inputs.release-name }}

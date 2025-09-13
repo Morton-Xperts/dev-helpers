@@ -1,0 +1,45 @@
+name: 'iOS Upload'
+description: Download built iOS app and upload to App Store Connect
+
+inputs:
+  username:
+    description: 'App Store Connect username (Apple ID)'
+    required: true
+  password:
+    description: 'App Store Connect app-specific password'
+    required: true
+  artifact-name:
+    description: 'Name of the iOS app artifact to download'
+    required: false
+    default: 'iOS-app'
+  artifact-path:
+    description: 'Path to place the downloaded iOS artifact'
+    required: false
+    default: 'ios/_artifacts'
+  ipa-file:
+    description: 'Filename of the IPA inside artifact path'
+    required: false
+    default: 'Nabor App.ipa'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Download iOS app artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ inputs.artifact-path }}
+
+    - name: List artifacts
+      shell: bash
+      run: |
+        ls -la ${{ inputs.artifact-path }}
+
+    - name: Upload app to App Store Connect
+      shell: bash
+      env:
+        APP_STORE_CONNECT_USERNAME: ${{ inputs.username }}
+        APP_STORE_CONNECT_PASSWORD: ${{ inputs.password }}
+      run: |
+        xcrun altool --upload-app -t ios -f "${{ inputs.artifact-path }}/${{ inputs.ipa-file }}" -u "$APP_STORE_CONNECT_USERNAME" -p "$APP_STORE_CONNECT_PASSWORD"
+

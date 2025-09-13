@@ -1,0 +1,43 @@
+name: 'Deploy Action'
+description: |
+  Deploys the application to the specified environment.
+
+inputs:
+  environment:
+    description: 'The environment to deploy to (e.g., staging, production)'
+    required: true
+
+outputs:
+  build-args:
+    description:  |
+      Build arguments collected from the environment file.
+    value: ${{ steps.env-build-args.outputs.env_file_build_args }}
+
+
+runs:
+  using: "composite"
+
+  steps:
+      - name: Collect build args from backend/.env.staging
+        id: env-build-args
+        env:
+          ENV_NAME: ${{ inputs.environment }}
+          ENV_FILE: backend/.env.${{ inputs.environment }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f "$ENV_FILE" ]; then
+            echo "::warning::Env file not found: $ENV_FILE"
+            echo "env_file_build_args=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          build_args=$(python3 actions/get-build-args/get_build_args.py "$ENV_FILE")
+
+          {
+            echo 'env_file_build_args<<EOF'
+            echo "$build_args"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+        
+          echo "Collected build args from $ENV_FILE"

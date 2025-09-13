@@ -1,0 +1,309 @@
+name: 'Incrementer'
+description: |
+  Increments a number found in a file by a specified amount.
+
+inputs:
+  increment-by:
+    description: 'The amount to increment the number by (default is 1)'
+    required: false
+    default: '1'
+
+  target-files:
+    description: 'The file to which the version should be applied (e.g., package.json or *.csproj)'
+    required: true
+    default: 'package.json'
+
+  type:
+    description: 'The type of the target file (e.g., json, regex)'
+    required: false
+    default: 'json'
+
+  json-path:
+    description: JSON path to the version field in the target file
+    required: false
+    default: '.version'
+
+  regex-replace:
+    description: 'Regex to find the value to increment (entire match or capture group)'
+    required: false
+    default: '^[0-9]+\.[0-9]+\.[0-9]+$'  # Default regex for semantic versioning
+
+  regex-replace-suffix:
+    description: 'Value to append to the replacement when using regex (e.g., -beta, -alpha)'
+    required: false
+    default: ''
+
+  regex-group:
+    description: 'The regex group to replace (default is the entire match)'
+    required: false
+    default: '0'
+
+  regex-replace-prefix:
+    description: 'Value to prepend to the replacement when using regex replace'
+    required: false
+    default: ''
+
+  regex-flags:
+    description: 'Regex flags (e.g., g for global, i for case-insensitive, m for multiline, s for dotall)'
+    required: false
+    default: 'ig'
+
+runs:
+  using: "composite"
+
+  steps:
+
+    - name: Validate increment-by input
+      shell: bash
+      run: |
+        set -euo pipefail
+        INCREMENT_BY="${{ inputs.increment-by }}"
+        if ! [[ "$INCREMENT_BY" =~ ^-?[0-9]+$ ]]; then
+          echo "::error::Invalid increment-by value '$INCREMENT_BY'. Must be an integer."
+          exit 1
+        fi
+        echo "Incrementing by $INCREMENT_BY"
+
+    - name: Resolve target files (expand globs; allow comma/newline/space separation)
+      id: resolve_files
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        python - << 'PY'
+        import os, sys, json, glob
+        raw = """${{ inputs.target-files }}"""
+        parts = []
+        for token in raw.replace(',', '\n').split():
+            token = token.strip()
+            if token:
+                parts.append(token)
+
+        files = []
+        for p in parts:
+            matches = glob.glob(p, recursive=True)
+            if matches:
+                files.extend(sorted(set(matches)))
+            else:
+                if os.path.exists(p):
+                    files.append(p)
+
+        files = sorted(set(files))
+        if not files:
+            print("::error::No target files resolved from 'target-files' input.", file=sys.stderr)
+            sys.exit(1)
+
+        out_path = "/tmp/apply-version-files.json"
+        with open(out_path, "w", encoding="utf-8") as f:
+            json.dump(files, f)
+        print(f"Resolved {len(files)} file(s):")
+        for fpath in files:
+            print(f" - {fpath}")
+        PY
+
+    - name: Apply increment via JSON path
+      if: ${{ inputs.type == 'json' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        INCREMENT_BY="${{ inputs.increment-by }}"
+        JSON_PATH="${{ inputs.json-path }}"
+        FILES_JSON="/tmp/apply-version-files.json"
+
+        python - << 'PY'
+        import json, sys, re, os
+        from typing import Any, Tuple
+
+        INCREMENT_BY = int("${{ inputs.increment-by }}")
+        JSON_PATH = """${{ inputs.json-path }}""".strip()
+        FILES_JSON = "/tmp/apply-version-files.json"
+
+        def parse_semver(s: str):
+            m = re.match(r'^(\d+)\.(\d+)\.(\d+)(.*)?$', s)
+            if not m:
+                return None
+            major, minor, patch = map(int, m.group(1,2,3))
+            rest = m.group(4) or ''
+            return major, minor, patch, rest
+
+        def increment_value(val: Any, inc: int) -> Any:
+            # int-like
+            if isinstance(val, int):
+                return val + inc
+            # numeric string
+            if isinstance(val, str) and re.fullmatch(r'-?\d+', val):
+                return str(int(val) + inc)
+            # semver string
+            if isinstance(val, str):
+                sv = parse_semver(val)
+                if sv:
+                    major, minor, patch, rest = sv
+                    patch += inc
+                    if patch < 0:
+                        raise ValueError(f"Patch version cannot be negative after increment: {patch}")
+                    return f"{major}.{minor}.{patch}{rest}"
+            raise ValueError(f"Unsupported value type for increment: {val!r}")
+
+        def get_path_tokens(path: str):
+            # support .a.b.c or a.b.c (ignore leading dots)
+            p = path.strip()
+            if p.startswith("$."):
+                p = p[2:]
+            elif p.startswith("."):
+                p = p[1:]
+            if not p:
+                raise ValueError("json-path is empty after normalization")
+            return p.split(".")
+
+        def get_parent_and_key(obj: Any, tokens: list) -> Tuple[Any, str]:
+            cur = obj
+            for t in tokens[:-1]:
+                if not isinstance(cur, dict) or t not in cur:
+                    raise KeyError(f"Path segment '{t}' not found.")
+                cur = cur[t]
+            key = tokens[-1]
+            if not isinstance(cur, dict) or key not in cur:
+                raise KeyError(f"Final key '{key}' not found.")
+            return cur, key
+
+        with open(FILES_JSON, "r", encoding="utf-8") as f:
+            files = json.load(f)
+
+        changed_files = 0
+        for path in files:
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except Exception as e:
+                print(f"::error file={path}::Failed to load JSON: {e}")
+                continue
+
+            try:
+                tokens = get_path_tokens(JSON_PATH)
+                parent, key = get_parent_and_key(data, tokens)
+                before = parent[key]
+                after = increment_value(before, INCREMENT_BY)
+                parent[key] = after
+                if before == after:
+                    print(f"::notice file={path}::No change (value unchanged).")
+                else:
+                    with open(path, "w", encoding="utf-8") as f:
+                        json.dump(data, f, ensure_ascii=False, indent=2)
+                        f.write("\n")
+                    print(f"::notice file={path}::Updated {JSON_PATH} from {before!r} to {after!r}")
+                    changed_files += 1
+            except Exception as e:
+                print(f"::error file={path}::Failed to update path '{JSON_PATH}': {e}")
+
+        if changed_files == 0:
+            print("::error::No files were updated in JSON mode.")
+            sys.exit(1)
+        PY
+
+    - name: Apply version via regex
+      if: ${{ inputs.type == 'regex' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        INCREMENT_BY="${{ inputs.increment-by }}"
+        PATTERN="${{ inputs.regex-replace }}"
+        FLAGS="${{ inputs.regex-flags }}"
+        GROUP="${{ inputs.regex-group }}"
+        PREFIX="${{ inputs.regex-replace-prefix }}"
+        SUFFIX="${{ inputs.regex-replace-suffix }}"
+        FILES_JSON="/tmp/apply-version-files.json"
+
+        python - << 'PY'
+        import json, sys, re, os
+        from typing import Match
+
+        INCREMENT_BY = int("${{ inputs.increment-by }}")
+        PATTERN = r"""${{ inputs.regex-replace }}"""
+        FLAGS_RAW = """${{ inputs.regex-flags }}""".strip().lower()
+        GROUP = int("${{ inputs.regex-group }}")
+        PREFIX = """${{ inputs.regex-replace-prefix }}"""
+        SUFFIX = """${{ inputs.regex-replace-suffix }}"""
+        FILES_JSON = "/tmp/apply-version-files.json"
+
+        # Translate flags
+        re_flags = 0
+        global_flag = False
+        for ch in FLAGS_RAW:
+            if ch == 'i': re_flags |= re.IGNORECASE
+            elif ch == 'm': re_flags |= re.MULTILINE
+            elif ch == 's': re_flags |= re.DOTALL
+            elif ch == 'g': global_flag = True
+
+        semver_re = re.compile(r'^(\d+)\.(\d+)\.(\d+)(.*)?$')
+
+        def bump_string(s: str, inc: int) -> str:
+            if re.fullmatch(r'-?\d+', s):
+                return str(int(s) + inc)
+            m = semver_re.match(s)
+            if m:
+                major, minor, patch = map(int, m.group(1,2,3))
+                rest = m.group(4) or ''
+                patch += inc
+                if patch < 0:
+                    raise ValueError(f"Patch version cannot be negative after increment: {patch}")
+                return f"{major}.{minor}.{patch}{rest}"
+            raise ValueError(f"Matched value is not numeric or semver: {s!r}")
+
+        regex = re.compile(PATTERN, re_flags)
+
+        with open(FILES_JSON, "r", encoding="utf-8") as f:
+            files = json.load(f)
+
+        total_files_changed = 0
+
+        def repl(m: Match) -> str:
+            # Choose which text to bump: whole match (group 0) or a capture group
+            try:
+                target = m.group(GROUP)
+            except IndexError:
+                raise ValueError(f"Group {GROUP} not found in match for pattern.")
+            new_val = bump_string(target, INCREMENT_BY)
+            replacement = f"{PREFIX}{new_val}{SUFFIX}"
+
+            if GROUP == 0:
+                return replacement
+            # Rebuild only the chosen group inside the full match
+            s = m.group(0)
+            g_start = m.start(GROUP) - m.start(0)
+            g_end   = m.end(GROUP)   - m.start(0)
+            return s[:g_start] + replacement + s[g_end:]
+
+        for path in files:
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    original = f.read()
+            except Exception as e:
+                print(f"::error file={path}::Failed to read file: {e}")
+                continue
+
+            if global_flag:
+                new_text, n = regex.subn(repl, original)
+            else:
+                m = regex.search(original)
+                if m:
+                    new_text = original[:m.start()] + repl(m) + original[m.end():]
+                    n = 1
+                else:
+                    new_text = original
+                    n = 0
+
+            if n > 0 and new_text != original:
+                try:
+                    with open(path, "w", encoding="utf-8") as f:
+                        f.write(new_text)
+                    print(f"::notice file={path}::Applied regex increment ({n} replacement{'s' if n!=1 else ''})")
+                    total_files_changed += 1
+                except Exception as e:
+                    print(f"::error file={path}::Failed to write updated content: {e}")
+            else:
+                print(f"::notice file={path}::No matches or no change.")
+
+        if total_files_changed == 0:
+            print("::error::No files were updated in regex mode.")
+            sys.exit(1)
+        PY

@@ -1,0 +1,20 @@
+name: 'Configure App Environment'
+description: |
+  Configures the app environment for iOS and Android apps
+
+inputs:
+  env:
+    description: 'Environment'
+    required: false
+    default: 'dev'
+
+runs:
+  using: 'composite'
+
+  steps:
+    - name: 'Run Configure Script'
+      shell: bash
+      env:
+        ENV: ${{ inputs.env == 'prd' && 'production' || 'development' }}
+      run: |
+        printf "// THIS FILE IS AUTO GENERATED. DO NOT MANUALLY MODIFY. SEE EXECUTABLE 'configure'\nconst env = '$ENV';\nexport default env;\n" > env.js

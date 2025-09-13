@@ -1,0 +1,124 @@
+name: 'iOS Build'
+description: Build iOS app and upload artifacts
+
+inputs:
+  node-version:
+    description: 'Node.js version to use'
+    required: false
+    default: '18'
+  env:
+    description: "App environment: 'dev' or 'prd'"
+    required: false
+    default: 'prd'
+  build-script:
+    description: 'Shell script to build iOS'
+    required: false
+    default: 'scripts/build-ios.sh'
+  certificate-base64:
+    description: 'Base64-encoded .p12 signing certificate'
+    required: true
+  p12-password:
+    description: 'Password for the .p12 certificate'
+    required: true
+  provisioning-profiles-base64:
+    description: 'Base64-encoded tar.gz of provisioning profiles'
+    required: true
+  keychain-password:
+    description: 'Temporary keychain password'
+    required: true
+  archive-artifact-name:
+    description: 'Name for the intermediate archive artifact'
+    required: false
+    default: 'iOS-archive'
+  app-artifact-name:
+    description: 'Name for the intermediate app artifact'
+    required: false
+    default: 'iOS-app'
+  archive-path:
+    description: 'Path to the archive output folder'
+    required: false
+    default: 'ios/build/Archive'
+  app-path:
+    description: 'Path to the app output folder (IPA)'
+    required: false
+    default: 'ios/build/App'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: 'Enable Corepack'
+      shell: bash
+      run: corepack enable
+
+    - name: Install Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: 'yarn'
+
+    - name: Cache CocoaPods
+      id: cocoapods-cache
+      uses: actions/cache@v3
+      with:
+        path: ios/Pods
+        key: ${{ runner.os }}-pods-${{ hashFiles('**/Podfile.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-pods-
+
+    - name: Install Apple certificate and provisioning profiles
+      shell: bash
+      env:
+        BUILD_CERTIFICATE_BASE64: ${{ inputs.certificate-base64 }}
+        P12_PASSWORD: ${{ inputs.p12-password }}
+        PROVISION_PROFILES_BASE64: ${{ inputs.provisioning-profiles-base64 }}
+        KEYCHAIN_PASSWORD: ${{ inputs.keychain-password }}
+      run: |
+        CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
+        PP_ARCHIVE=$RUNNER_TEMP/mobile_pp.tgz
+        KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+
+        echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o $CERTIFICATE_PATH
+        echo -n "$PROVISION_PROFILES_BASE64" | base64 --decode -o $PP_ARCHIVE
+
+        security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+        security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+        security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+        security import $CERTIFICATE_PATH -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+        security list-keychain -d user -s $KEYCHAIN_PATH
+
+        mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+        tar xzvf $PP_ARCHIVE -C $RUNNER_TEMP
+        for PROVISION in `ls $RUNNER_TEMP/*.mobileprovision`; do
+          UUID=`/usr/libexec/PlistBuddy -c 'Print :UUID' /dev/stdin <<< $(security cms -D -i $PROVISION)`
+          cp $PROVISION ~/Library/MobileDevice/Provisioning\ Profiles/$UUID.mobileprovision
+        done
+        security find-identity -v -p codesigning
+        ls -l ~/Library/MobileDevice/Provisioning\ Profiles
+
+    - name: Configure app environment
+      shell: bash
+      env:
+        ENV: ${{ inputs.env == 'prd' && 'production' || 'development' }}
+      run: |
+        printf "// THIS FILE IS AUTO GENERATED. DO NOT MANUALLY MODIFY.\nconst env = '%s';\nexport default env;\n" "$ENV" > env.js
+
+    - name: Run build script
+      shell: bash
+      env:
+        NODE_OPTIONS: --openssl-legacy-provider
+      run: |
+        sh ${{ inputs.build-script }}
+
+    - name: Upload intermediate archive artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.archive-artifact-name }}
+        path: ${{ inputs.archive-path }}
+
+    - name: Upload intermediate app artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.app-artifact-name }}
+        path: ${{ inputs.app-path }}
+

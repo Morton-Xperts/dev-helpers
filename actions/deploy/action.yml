@@ -1,0 +1,88 @@
+name: 'Deploy Action'
+description: |
+  Deploys the application to the specified environment.
+
+inputs:
+  environment:
+    description: 'The environment to deploy to (e.g., staging, production)'
+    required: true
+
+  version:
+    description: 'The version of the application to deploy (e.g., 1.0.0)'
+    required: true
+
+  acr-login-server:
+    description: 'The login server of the Azure Container Registry (e.g., myregistry.azurecr.io)'
+    required: true
+
+  acr-username:
+    description: 'The username for the Azure Container Registry'
+    required: true
+
+  acr-password:
+    description: 'The password for the Azure Container Registry'
+    required: true
+
+  image-name:
+    description: 'The name of the Docker image to build and push (e.g., myapp)'
+    required: true
+
+  build-args:
+    description: 'Build arguments for the Docker build process in key=value format, one per line'
+    required: true
+    default: ''
+
+  azure-credentials:
+    description: 'The Azure credentials JSON for logging in (use secrets)'
+    required: true
+
+  azure-app-name:
+    description: 'The name of the Azure Web App to deploy to'
+    required: true
+
+  azure-resource-group-name:
+    description: 'The resource group of the Azure Web App'
+    required: true
+
+runs:
+  using: "composite"
+
+  steps:
+    - name: Login to Azure Container Registry
+      uses: azure/docker-login@v2
+      with:
+        login-server: ${{ inputs.acr-login-server }}
+        username: ${{ inputs.acr-username }}
+        password: ${{ inputs.acr-password }}
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: ${{ inputs.acr-login-server }}/${{ inputs.image-name }}:${{ inputs.version }}-${{ inputs.environment }}
+        file: Dockerfile
+        build-args: |
+          SECRET_KEY=build
+          ${{ inputs.build-args }}
+
+    - name: Login to Azure
+      uses: azure/login@v2
+      with:
+        creds: ${{ inputs.azure-credentials }}
+      
+    - name: Set container on Azure Web App
+      shell: bash
+      run: |
+        az webapp config container set \
+          --name ${{ inputs.azure-app-name }} \
+          --resource-group ${{ inputs.azure-resource-group-name }} \
+          --container-image-name "${{ inputs.acr-login-server }}/${{ inputs.image-name }}:${{ inputs.version }}-${{ inputs.environment }}" \
+          --container-registry-url "https://${{ inputs.acr-login-server }}"
+
+    - name: Restart Web App
+      shell: bash
+      run: |
+        az webapp restart \
+          --name ${{ inputs.azure-app-name }} \
+          --resource-group ${{ inputs.azure-resource-group-name }}

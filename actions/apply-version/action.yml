@@ -1,0 +1,296 @@
+name: 'Apply Version'
+description: |
+  Applies the version from input to a specified file (e.g., package.json or *.csproj)
+
+inputs:
+  version:
+    description: 'The version to apply (in semantic versioning format [x.x.x])'
+    required: true
+
+  target-files:
+    description: 'The file to which the version should be applied (e.g., package.json or *.csproj)'
+    required: true
+    default: 'package.json'
+
+  type:
+    description: 'The type of the target file (e.g., json, regex)'
+    required: false
+    default: 'json'
+
+  json-path:
+    description: JSON path to the version field in the target file
+    required: false
+    default: '.version'
+
+  regex-replace:
+    description: 'Optional regex to validate the version format'
+    required: false
+    default: '^[0-9]+\.[0-9]+\.[0-9]+$'  # Default regex for semantic versioning
+
+  regex-replace-suffix:
+    description: 'Value to append to the version when using regex replace (e.g., -beta, -alpha)'
+    required: false
+    default: ''
+
+  regex-group:
+    description: 'The regex group to replace (default is the entire match)'
+    required: false
+    default: '0'
+
+  regex-replace-prefix:
+    description: 'Value to prepend to the version when using regex replace'
+    required: false
+    default: ''
+
+  regex-flags:
+    description: 'Optional regex flags (e.g., g for global, i for case-insensitive)'
+    required: false
+    default: 'ig'
+
+runs:
+  using: "composite"
+
+  steps:
+
+    - name: Validate version input
+      shell: bash
+      run: |
+        set -euo pipefail
+        VERSION="${{ inputs.version }}"
+        # Basic semver (allows optional pre-release/build like -rc.1 or -beta)
+        if [[ -z "$VERSION" || ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z\.]+)?$ ]]; then
+          echo "::error::Invalid version '$VERSION'. Expected semantic version like 1.2.3 or 1.2.3-rc.1"
+          exit 1
+        fi
+        echo "Version to apply: $VERSION"
+
+    - name: Resolve target files (expand globs; allow comma/newline/space separation)
+      id: resolve_files
+      shell: bash
+      run: |
+        set -euo pipefail
+        RAW="${{ inputs.target-files }}"
+
+        # Normalize separators to newlines
+        NORMALIZED=$(printf "%s" "$RAW" | tr ', ' '\n' | sed '/^\s*$/d')
+
+        # Expand globs using Python so it works uniformly and can error clearly if nothing matches.
+        python - << 'PY'
+        import os, sys, json, glob, pathlib
+        raw = """${{ inputs.target-files }}"""
+        # Normalize separators to newlines
+        parts = []
+        for token in raw.replace(',', '\n').split():
+            token = token.strip()
+            if token:
+                parts.append(token)
+
+        files = []
+        for p in parts:
+            matches = glob.glob(p, recursive=True)
+            if matches:
+                files.extend(sorted(set(matches)))
+            else:
+                # If the literal file exists, take it; else keep it as-is to fail later with a clearer message
+                if os.path.exists(p):
+                    files.append(p)
+
+        files = sorted(set(files))
+        if not files:
+            print("::error::No target files resolved from 'target-files' input.", file=sys.stderr)
+            sys.exit(1)
+
+        out_path = "/tmp/apply-version-files.json"
+        with open(out_path, "w", encoding="utf-8") as f:
+            json.dump(files, f)
+        print(f"Resolved {len(files)} file(s):")
+        for fpath in files:
+            print(f" - {fpath}")
+        PY
+
+    - name: Apply version via JSON path
+      if: ${{ inputs.type == 'json' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        VERSION="${{ inputs.version }}"
+        JSON_PATH="${{ inputs.json-path }}"
+        FILES_JSON="/tmp/apply-version-files.json"
+
+        python - << 'PY'
+        import json, sys, os, pathlib
+
+        version = """${{ inputs.version }}"""
+        path_str = """${{ inputs.json-path }}"""
+        files_path = "/tmp/apply-version-files.json"
+
+        with open(files_path, "r", encoding="utf-8") as f:
+            files = json.load(f)
+
+        # Support dotted paths like .version or version or .tool.poetry.version
+        def path_parts(p):
+            p = p.strip()
+            if p.startswith('.'):
+                p = p[1:]
+            return [part for part in p.split('.') if part]
+
+        parts = path_parts(path_str)
+        if not parts:
+            print("::error::json-path is empty after normalization.", file=sys.stderr)
+            sys.exit(1)
+
+        updated_count = 0
+        failed = []
+
+        for fp in files:
+            try:
+                text = pathlib.Path(fp).read_text(encoding="utf-8")
+                data = json.loads(text)
+            except Exception as e:
+                failed.append((fp, f"Failed to parse JSON: {e}"))
+                continue
+
+            # Walk & set
+            obj = data
+            try:
+                for i, key in enumerate(parts):
+                    if i == len(parts) - 1:
+                        # Set leaf
+                        obj[key] = version
+                    else:
+                        if key not in obj or not isinstance(obj[key], dict):
+                            obj[key] = {}
+                        obj = obj[key]
+            except Exception as e:
+                failed.append((fp, f"Failed to set path '{path_str}': {e}"))
+                continue
+
+            try:
+                pathlib.Path(fp).write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+                updated_count += 1
+            except Exception as e:
+                failed.append((fp, f"Failed to write file: {e}"))
+
+        if failed:
+            for f, msg in failed:
+                print(f"::error file={f}::{msg}")
+        print(f"Updated {updated_count} JSON file(s) at path '{path_str}' to version {version}.")
+        if updated_count == 0:
+            sys.exit(1)
+        PY
+
+    - name: Apply version via regex
+      if: ${{ inputs.type == 'regex' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        VERSION="${{ inputs.version }}"
+        PATTERN="${{ inputs.regex-replace }}"
+        FLAGS="${{ inputs.regex-flags }}"
+        GROUP="${{ inputs.regex-group }}"
+        PREFIX="${{ inputs.regex-replace-prefix }}"
+        SUFFIX="${{ inputs.regex-replace-suffix }}"
+        FILES_JSON="/tmp/apply-version-files.json"
+
+        python - << 'PY'
+        import json, sys, re, pathlib
+
+        version = """${{ inputs.version }}"""
+        pattern = r"""${{ inputs.regex-replace }}"""
+        flags_str = """${{ inputs.regex-flags }}""".lower()
+        group_idx = int("""${{ inputs.regex-group }}""")
+        prefix = """${{ inputs.regex-replace-prefix }}"""
+        suffix = """${{ inputs.regex-replace-suffix }}"""
+
+        with open("/tmp/apply-version-files.json", "r", encoding="utf-8") as f:
+            files = json.load(f)
+
+        # Translate flags for Python's re
+        re_flags = 0
+        global_flag = False
+        for ch in flags_str:
+            if ch == 'i':
+                re_flags |= re.IGNORECASE
+            elif ch == 'm':
+                re_flags |= re.MULTILINE
+            elif ch == 's':
+                re_flags |= re.DOTALL
+            elif ch == 'g':
+                global_flag = True
+            elif ch.strip() == '':
+                continue
+            else:
+                # Ignore unknown flags vs. hard-fail—be permissive
+                pass
+
+        try:
+            rx = re.compile(pattern, re_flags)
+        except re.error as e:
+            print(f"::error::Invalid regex pattern: {e}")
+            sys.exit(1)
+
+        replacement_value = f"{prefix}{version}{suffix}"
+
+        def replace_group(text: str, rx: re.Pattern, group: int, repl: str, global_flag: bool):
+            count = 0
+            def _do(m: re.Match):
+                nonlocal count
+                count += 1
+                if group == 0:
+                    return repl
+                # Replace only the specified capture group N (1-based)
+                if group > m.re.groups:
+                    raise IndexError(f"regex has only {m.re.groups} capture group(s); requested group {group}")
+                start, end = m.start(group), m.end(group)
+                full = m.group(0)
+                # Compute offsets relative to match start
+                rel_start = start - m.start(0)
+                rel_end = end - m.start(0)
+                return full[:rel_start] + repl + full[rel_end:]
+
+            if global_flag:
+                new_text = rx.sub(_do, text)
+            else:
+                new_text, n = rx.subn(_do, text, count=1)
+                # Our inner function already increments count correctly,
+                # but subn returns n = number of pattern matches replaced (not groups).
+                # We'll align 'count' to n in single-replace path.
+                count = n
+            return new_text, count
+
+        total_replacements = 0
+        failures = []
+
+        for fp in files:
+            p = pathlib.Path(fp)
+            try:
+                content = p.read_text(encoding="utf-8")
+            except Exception as e:
+                failures.append((fp, f"Failed to read file: {e}"))
+                continue
+
+            try:
+                new_content, count = replace_group(content, rx, group_idx, replacement_value, global_flag)
+            except Exception as e:
+                failures.append((fp, f"Regex replacement error: {e}"))
+                continue
+
+            if count > 0 and new_content != content:
+                try:
+                    p.write_text(new_content, encoding="utf-8")
+                except Exception as e:
+                    failures.append((fp, f"Failed to write file: {e}"))
+                    continue
+                total_replacements += count
+            else:
+                # No matches—warn but keep evaluating others
+                print(f"::warning file={fp}::No matches found with pattern; file unchanged.")
+
+        if failures:
+            for f, msg in failures:
+                print(f"::error file={f}::{msg}")
+
+        print(f"Completed regex mode: {total_replacements} replacement(s) across {len(files)} file(s). Pattern='{pattern}', group={group_idx}, flags='{flags_str}'.")
+        if total_replacements == 0:
+            sys.exit(1)
+        PY
