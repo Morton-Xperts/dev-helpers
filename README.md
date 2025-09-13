@@ -29,6 +29,10 @@ The bump level is inferred from the commit message prefix:
 - `minor:` or `feat:` → minor
 - otherwise → patch
 
+## Docs
+- iOS build configuration and workflows: see `docs/ios-build.md`.
+- Android build configuration and workflows: see `docs/android-build.md`.
+
 ## Contributing
 - Follow the style enforced by Prettier/ESLint.
 - Keep recipes concise and cross-platform where possible; add domain-specific steps under the relevant `recipes/_*.just` file.

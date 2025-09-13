@@ -10,7 +10,6 @@
 All fields are optional; sensible defaults apply if a field is missing. Keys are case-sensitive.
 
 - `nodeVersion`: Node.js version for CI setup (e.g., `18`).
-- `env`: Logical app environment used to generate `env.js` (`dev` or `prd`).
 - `buildScript`: Path to the build script (default `scripts/build-ios.sh`).
 - `workspace`: Xcode workspace filename (e.g., `MyApp.xcworkspace`).
 - `scheme`: Xcode scheme to build (e.g., `Production`).
@@ -41,7 +40,6 @@ Security note: Avoid committing real secrets to version control. Prefer supplyin
 ```
 {
   "nodeVersion": "18",
-  "env": "prd",
   "buildScript": "scripts/build-ios.sh",
   "workspace": "MyApp.xcworkspace",
   "scheme": "Production",
