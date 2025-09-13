@@ -64,7 +64,7 @@ jobs:
           type: "json"
           json-path: "$.specVersion"
 
-      - name: 'Increment Package Version'
+      - name: 'Commit Package Version'
         uses: ./.xperts/dev-helpers/actions/version-bump
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
