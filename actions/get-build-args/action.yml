@@ -32,7 +32,7 @@ runs:
             exit 0
           fi
 
-          build_args=$(python3 actions/get-build-args/get_build_args.py "$ENV_FILE")
+          build_args=$(python3 .xperts/dev-helpers/actions/get-build-args/get_build_args.py "$ENV_FILE")
 
           {
             echo 'env_file_build_args<<EOF'
