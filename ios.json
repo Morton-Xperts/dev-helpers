@@ -20,6 +20,6 @@
   "provisioningProfilesBase64": "",
   "keychainPassword": "",
   "$": {
-    "specVersion": "0.13.0"
+    "specVersion": "0.14.0"
   }
 }
