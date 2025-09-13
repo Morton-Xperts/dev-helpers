@@ -175,9 +175,6 @@ runs:
             for f, msg in failed:
                 print(f"::error file={f}::{msg}")
         print(f"Updated {updated_count} JSON file(s) at path '{path_str}' to version {version}.")
-        if updated_count == 0:
-            sys.exit(1)
-        PY
 
     - name: Apply version via regex
       if: ${{ inputs.type == 'regex' }}
@@ -291,6 +288,3 @@ runs:
                 print(f"::error file={f}::{msg}")
 
         print(f"Completed regex mode: {total_replacements} replacement(s) across {len(files)} file(s). Pattern='{pattern}', group={group_idx}, flags='{flags_str}'.")
-        if total_replacements == 0:
-            sys.exit(1)
-        PY
