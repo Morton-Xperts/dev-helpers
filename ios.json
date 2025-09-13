@@ -1,0 +1,24 @@
+{
+  "nodeVersion": "18",
+  "env": "prd",
+  "buildScript": "scripts/build-ios.sh",
+  "workspace": "MyApp.xcworkspace",
+  "scheme": "Production",
+  "targetSdk": "iphonesimulator",
+  "applicationName": "MyApp",
+  "developerName": "iPhone Distribution: Your Company, Inc. (TEAMID)",
+  "releaseBuildDir": "build/Release",
+  "archivePath": "build/Archive/Production.xcarchive",
+  "exportOptionsPlist": "ExportOptions.plist",
+  "exportPath": "build/App",
+  "archiveArtifactName": "iOS-archive",
+  "appArtifactName": "iOS-app",
+  "appStoreConnectUsername": "",
+  "appStoreConnectPassword": "",
+  
+  // Signing (do NOT commit real secrets to version control)
+  "certificateBase64": "",
+  "p12Password": "",
+  "provisioningProfilesBase64": "",
+  "keychainPassword": ""
+}

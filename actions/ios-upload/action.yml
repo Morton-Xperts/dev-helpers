@@ -4,42 +4,108 @@ description: Download built iOS app and upload to App Store Connect
 inputs:
   username:
     description: 'App Store Connect username (Apple ID)'
-    required: true
+    required: false
+    default: ''
   password:
     description: 'App Store Connect app-specific password'
-    required: true
+    required: false
+    default: ''
   artifact-name:
     description: 'Name of the iOS app artifact to download'
     required: false
-    default: 'iOS-app'
+    default: ''
   artifact-path:
     description: 'Path to place the downloaded iOS artifact'
     required: false
-    default: 'ios/_artifacts'
+    default: ''
   ipa-file:
     description: 'Filename of the IPA inside artifact path'
     required: false
-    default: 'Nabor App.ipa'
+    default: ''
 
 runs:
   using: 'composite'
   steps:
+    - name: Resolve defaults from ios.json
+      id: ios
+      shell: bash
+      run: |
+        set -euo pipefail
+        ARTIFACT_PATH="ios/build/App"
+        IPA_FILE=""
+        if [ -f ios.json ]; then
+          EXPORT_PATH=$(jq -r '.exportPath // empty' ios.json)
+          APP_NAME=$(jq -r '.applicationName // empty' ios.json)
+          if [ -n "$EXPORT_PATH" ]; then
+            ARTIFACT_PATH="ios/${EXPORT_PATH}"
+          fi
+          if [ -n "$APP_NAME" ]; then
+            IPA_FILE="${APP_NAME}.ipa"
+          fi
+        fi
+        echo "artifact_path=$ARTIFACT_PATH" >> "$GITHUB_OUTPUT"
+        echo "ipa_file=$IPA_FILE" >> "$GITHUB_OUTPUT"
+
+    - name: Resolve artifact-name and credentials from ios.json
+      id: ios2
+      shell: bash
+      run: |
+        set -euo pipefail
+        ARTIFACT_NAME="iOS-app"
+        USERNAME=""
+        PASSWORD=""
+        if [ -f ios.json ]; then
+          ART_NAME=$(jq -r '.appArtifactName // empty' ios.json)
+          U=$(jq -r '.appStoreConnectUsername // empty' ios.json)
+          P=$(jq -r '.appStoreConnectPassword // empty' ios.json)
+          if [ -n "$ART_NAME" ]; then ARTIFACT_NAME="$ART_NAME"; fi
+          if [ -n "$U" ]; then USERNAME="$U"; fi
+          if [ -n "$P" ]; then PASSWORD="$P"; fi
+        fi
+        echo "artifact_name=$ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
+        echo "username=$USERNAME" >> "$GITHUB_OUTPUT"
+        echo "password=$PASSWORD" >> "$GITHUB_OUTPUT"
     - name: Download iOS app artifact
       uses: actions/download-artifact@v4
       with:
-        name: ${{ inputs.artifact-name }}
-        path: ${{ inputs.artifact-path }}
+        name: ${{ inputs.artifact-name || steps.ios2.outputs.artifact_name }}
+        path: ${{ inputs.artifact-path || steps.ios.outputs.artifact_path }}
 
     - name: List artifacts
       shell: bash
       run: |
-        ls -la ${{ inputs.artifact-path }}
+        ls -la ${{ inputs.artifact-path || steps.ios.outputs.artifact_path }}
+
+    - name: Resolve IPA filename
+      id: ipa
+      shell: bash
+      run: |
+        set -euo pipefail
+        DIR="${{ inputs.artifact-path || steps.ios.outputs.artifact_path }}"
+        INPUT_NAME="${{ inputs.ipa-file }}"
+        DEFAULT_NAME="${{ steps.ios.outputs.ipa_file }}"
+        RESOLVED=""
+        if [ -n "$INPUT_NAME" ]; then
+          RESOLVED="$INPUT_NAME"
+        else
+          COUNT=$(ls -1 "$DIR"/*.ipa 2>/dev/null | wc -l | tr -d ' ')
+          if [ "$COUNT" = "1" ]; then
+            RESOLVED=$(basename $(ls -1 "$DIR"/*.ipa))
+          elif [ -n "$DEFAULT_NAME" ] && [ -f "$DIR/$DEFAULT_NAME" ]; then
+            RESOLVED="$DEFAULT_NAME"
+          else
+            echo "::error::Could not resolve IPA filename automatically. Provide inputs.ipa-file."
+            exit 1
+          fi
+        fi
+        echo "file=$RESOLVED" >> "$GITHUB_OUTPUT"
 
     - name: Upload app to App Store Connect
       shell: bash
       env:
-        APP_STORE_CONNECT_USERNAME: ${{ inputs.username }}
-        APP_STORE_CONNECT_PASSWORD: ${{ inputs.password }}
+        APP_STORE_CONNECT_USERNAME: ${{ inputs.username || steps.ios2.outputs.username }}
+        APP_STORE_CONNECT_PASSWORD: ${{ inputs.password || steps.ios2.outputs.password }}
       run: |
-        xcrun altool --upload-app -t ios -f "${{ inputs.artifact-path }}/${{ inputs.ipa-file }}" -u "$APP_STORE_CONNECT_USERNAME" -p "$APP_STORE_CONNECT_PASSWORD"
-
+        DIR="${{ inputs.artifact-path || steps.ios.outputs.artifact_path }}"
+        FILE="${{ steps.ipa.outputs.file }}"
+        xcrun altool --upload-app -t ios -f "$DIR/$FILE" -u "$APP_STORE_CONNECT_USERNAME" -p "$APP_STORE_CONNECT_PASSWORD"
