@@ -18,8 +18,5 @@
   "certificateBase64": "",
   "p12Password": "",
   "provisioningProfilesBase64": "",
-  "keychainPassword": "",
-  "$": {
-    "specVersion": "0.15.1"
-  }
+  "keychainPassword": ""
 }

@@ -17,8 +17,5 @@
   "appArtifactPath": "android/_artifacts",
   "uploadDebugSymbolsPath": "android/_debugSymbols",
   "releaseFile": "android/_artifacts/app-release.aab",
-  "releaseName": "",
-  "$": {
-    "specVersion": "0.15.1"
-  }
+  "releaseName": ""
 }
