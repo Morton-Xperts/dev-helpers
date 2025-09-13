@@ -34,10 +34,10 @@ jobs:
           cache: 'yarn'
 
       - name: 'Increment Package Version'
-        uses: './actions/version-bump'
+        uses: ./.xperts/dev-helpers/actions/version-bump
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: 'Get New Version'
         id: version
-        uses: './actions/version'
+        uses: ./.xperts/dev-helpers/actions/version

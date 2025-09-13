@@ -1,0 +1,116 @@
+name: Update Submodule
+description: Update a git submodule to a specific ref/branch and commit the change in the parent repo.
+
+inputs:
+  repo:
+    description: The GitHub repository of the submodule (e.g., owner/repo)
+    required: true
+  path:
+    description: Path to the submodule within this repository
+    required: true
+  branch:
+    description: 'Branch to update to if no ref is provided (default: main)'
+    required: false
+    default: main
+  ref:
+    description: Git ref to checkout in the submodule (branch, tag, or commit)
+    required: false
+    default: ''
+  token:
+    description: GitHub token with repo access (use a PAT for private repos)
+    required: true
+
+outputs:
+  updated:
+    description: Whether the submodule pointer changed and a commit was created
+    value: ${{ steps.update.outputs.updated }}
+  new-sha:
+    description: The new short SHA of the submodule HEAD after update
+    value: ${{ steps.update.outputs.new_sha }}
+
+runs:
+  using: composite
+  steps:
+    - name: Configure git identity
+      shell: bash
+      run: |
+        set -euo pipefail
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+    - name: Ensure submodule is initialized
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ ! -d "${{ inputs.path }}" ]; then
+          echo "Initializing submodule at ${{ inputs.path }}";
+          git submodule update --init --recursive -- "${{ inputs.path }}"
+        fi
+
+    - id: update
+      name: Update submodule to target ref
+      shell: bash
+      env:
+        REPO: ${{ inputs.repo }}
+        SUB_PATH: ${{ inputs.path }}
+        REF: ${{ inputs.ref }}
+        BRANCH: ${{ inputs.branch }}
+        TOKEN: ${{ inputs.token }}
+      run: |
+        set -euo pipefail
+
+        if [ -z "${REF}" ]; then
+          TARGET_REF="${BRANCH}"
+        else
+          TARGET_REF="${REF}"
+        fi
+
+        echo "Target ref: ${TARGET_REF}"
+        echo "Submodule path: ${SUB_PATH}"
+
+        if [ ! -d "${SUB_PATH}/.git" ]; then
+          echo "Submodule at ${SUB_PATH} is not initialized. Running init/update..."
+          git submodule update --init --recursive -- "${SUB_PATH}"
+        fi
+
+        # Record previous pointer (if any)
+        OLD_SHA=$(git rev-parse --short=7 HEAD:"${SUB_PATH}" 2>/dev/null || echo "")
+        echo "Old submodule SHA: ${OLD_SHA}"
+
+        # Authenticate submodule remote using token for fetch
+        AUTH_URL="https://x-access-token:${TOKEN}@github.com/${REPO}.git"
+        pushd "${SUB_PATH}" >/dev/null
+        if git remote get-url origin >/dev/null 2>&1; then
+          git remote set-url origin "${AUTH_URL}"
+        else
+          git remote add origin "${AUTH_URL}"
+        fi
+        git fetch --no-tags --depth 1 origin "${TARGET_REF}"
+        git checkout --detach FETCH_HEAD
+        NEW_SHA=$(git rev-parse --short=7 HEAD)
+        popd >/dev/null
+
+        echo "New submodule SHA: ${NEW_SHA}"
+
+        if [ "${OLD_SHA}" = "${NEW_SHA}" ] && [ -n "${OLD_SHA}" ]; then
+          echo "No change in submodule pointer. Skipping commit."
+          echo "updated=false" >> "$GITHUB_OUTPUT"
+          echo "new_sha=${NEW_SHA}" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        # Stage and commit the updated submodule pointer
+        git add -- "${SUB_PATH}"
+        if git diff --cached --quiet -- "${SUB_PATH}"; then
+          echo "No staged changes for ${SUB_PATH}."
+          echo "updated=false" >> "$GITHUB_OUTPUT"
+          echo "new_sha=${NEW_SHA}" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        COMMIT_MSG="chore(submodule): bump ${SUB_PATH} to ${REPO}@${TARGET_REF} (${NEW_SHA})"
+        git commit -m "${COMMIT_MSG}"
+        echo "Committed update: ${COMMIT_MSG}"
+        echo "updated=true" >> "$GITHUB_OUTPUT"
+        echo "new_sha=${NEW_SHA}" >> "$GITHUB_OUTPUT"
+
