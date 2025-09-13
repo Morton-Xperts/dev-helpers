@@ -164,7 +164,7 @@ choose-env:
 
 # Configures the local environment for the project
 [working-directory: 'backend']
-configure:
+configure superuser_password:
     #/usr/bin/env bash
 
     # Use `.env.example` to create `.env`
@@ -176,7 +176,7 @@ configure:
     # <superuser_password>
     @just replace-token ".env" "postgres_pwd" $(openssl rand -hex 8)
     @just replace-token ".env" "random_string_goes_here" $(openssl rand -hex 16)
-    @just replace-token ".env" "superuser_password" "admin123"
+    @just replace-token ".env" "superuser_password" "{{superuser_password}}"
 
     # Create a local `.env.local` file if it doesn't exist
     if [ ! -f .env.local ]; then cp .env .env.local; fi
