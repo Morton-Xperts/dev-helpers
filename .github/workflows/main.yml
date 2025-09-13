@@ -54,7 +54,7 @@ jobs:
           version: ${{ steps.version.outputs.version }}
           target-files: "android.json"
           type: "json"
-          json-path: "$.specVersion"
+          json-path: "specVersion"
 
       - name: 'Apply Version to ios.json'
         uses: ./.xperts/dev-helpers/actions/apply-version
@@ -62,7 +62,7 @@ jobs:
           version: ${{ steps.version.outputs.version }}
           target-files: "ios.json"
           type: "json"
-          json-path: "$.specVersion"
+          json-path: "specVersion"
 
       - name: 'Commit Package Version'
         uses: ./.xperts/dev-helpers/actions/version-bump
