@@ -9,7 +9,3 @@ import "_frontend.just"
 import "_main.just"
 import "_run.just"
 import "_web.just"
-
-@default:
-    @echo "Available recipes:"
-    @just --choose
