@@ -1,5 +1,5 @@
 {
-  "specVersion": "0.0.0",
+  "specVersion": "0.15.2",
   "nodeVersion": "18",
   "buildScript": "scripts/build-ios.sh",
   "workspace": "MyApp.xcworkspace",
