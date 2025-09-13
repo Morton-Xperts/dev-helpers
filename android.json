@@ -1,15 +1,12 @@
 {
   "specVersion": "0.0.0",
-
   "nodeVersion": "18",
-
   "aabPath": "android/app/build/outputs/bundle/release/app-release.aab",
   "manifestsPath": "android/app/build/intermediates/merged_manifests",
   "debugSymbolsPath": "android/app/build/intermediates/merged_native_libs/release/out/lib",
   "appArtifactName": "android",
   "manifestsArtifactName": "android-merged-manifests",
   "debugSymbolsArtifactName": "android-debug-symbols",
-
   "serviceAccountJson": "",
   "packageName": "",
   "track": "internal",
@@ -20,5 +17,8 @@
   "appArtifactPath": "android/_artifacts",
   "uploadDebugSymbolsPath": "android/_debugSymbols",
   "releaseFile": "android/_artifacts/app-release.aab",
-  "releaseName": ""
+  "releaseName": "",
+  "$": {
+    "specVersion": "0.11.0"
+  }
 }
