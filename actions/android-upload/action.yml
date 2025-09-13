@@ -3,82 +3,124 @@ description: Download Android artifacts and upload to Google Play
 
 inputs:
   service-account-json:
-    description: 'Service account JSON (plaintext) for Google Play API'
-    required: true
+    description: 'Service account JSON (plaintext) for Google Play API (overrides android.json)'
+    required: false
+    default: ''
   package-name:
-    description: 'Android applicationId / package name'
-    required: true
-  track:
-    description: 'Google Play track'
+    description: 'Android applicationId / package name (overrides android.json)'
     required: false
-    default: 'internal'
-  status:
-    description: 'Release status'
-    required: false
-    default: 'completed'
-  in-app-update-priority:
-    description: 'In-app update priority'
-    required: false
-    default: '2'
-  whats-new-directory:
-    description: 'Directory with whatsnew files'
-    required: false
-    default: 'whats-new'
-  changes-not-sent-for-review:
-    description: 'Set changesNotSentForReview flag'
-    required: false
-    default: 'false'
-  app-artifact-path:
-    description: 'Path to place the downloaded Android artifact'
-    required: false
-    default: 'android/_artifacts'
-  debug-symbols-artifact-name:
-    description: 'Name of the Debug Symbols artifact to download'
-    required: false
-    default: 'DebugSymbols'
-  debug-symbols-path:
-    description: 'Path to place the downloaded Debug Symbols'
-    required: false
-    default: 'android/_debugSymbols'
-  release-file:
-    description: 'Release AAB path to upload'
-    required: false
-    default: 'android/_artifacts/app-release.aab'
-  release-name:
-    description: 'Optional release name'
-    required: false
+    default: ''
 
 runs:
   using: 'composite'
   steps:
+    - name: Resolve Android upload config from android.json
+      id: android_up
+      env:
+        IN_SA: ${{ inputs.service-account-json }}
+        IN_PKG: ${{ inputs.package-name }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        # Defaults
+        SERVICE_ACCOUNT_JSON=""
+        PACKAGE_NAME=""
+        TRACK="internal"
+        STATUS="completed"
+        PRIORITY="2"
+        WHATS_NEW_DIR="whats-new"
+        CHANGES_NOT_SENT="false"
+        APP_ARTIFACT_PATH="android/_artifacts"
+        APP_ARTIFACT_NAME="android"
+        DEBUG_SYMBOLS_ARTIFACT_NAME="DebugSymbols"
+        DEBUG_SYMBOLS_PATH="android/_debugSymbols"
+        RELEASE_FILE="android/_artifacts/app-release.aab"
+        RELEASE_NAME=""
+
+        if [ -f android.json ]; then
+          v() { jq -r "$1 // empty" android.json 2>/dev/null || true; }
+          sa=$(v '.serviceAccountJson')
+          [ -n "$sa" ] && SERVICE_ACCOUNT_JSON="$sa"
+          pn=$(v '.packageName')
+          [ -n "$pn" ] && PACKAGE_NAME="$pn"
+          trk=$(v '.track')
+          [ -n "$trk" ] && TRACK="$trk"
+          st=$(v '.status')
+          [ -n "$st" ] && STATUS="$st"
+          pr=$(v '.inAppUpdatePriority')
+          [ -n "$pr" ] && PRIORITY="$pr"
+          wd=$(v '.whatsNewDirectory')
+          [ -n "$wd" ] && WHATS_NEW_DIR="$wd"
+          cn=$(v '.changesNotSentForReview')
+          [ -n "$cn" ] && CHANGES_NOT_SENT="$cn"
+          ap=$(v '.appArtifactPath')
+          [ -n "$ap" ] && APP_ARTIFACT_PATH="$ap"
+          aan=$(v '.appArtifactName')
+          [ -n "$aan" ] && APP_ARTIFACT_NAME="$aan"
+          dan=$(v '.debugSymbolsArtifactName')
+          [ -n "$dan" ] && DEBUG_SYMBOLS_ARTIFACT_NAME="$dan"
+          dp=$(v '.uploadDebugSymbolsPath // .debugSymbolsPath')
+          [ -n "$dp" ] && DEBUG_SYMBOLS_PATH="$dp"
+          rf=$(v '.releaseFile')
+          [ -n "$rf" ] && RELEASE_FILE="$rf"
+          rn=$(v '.releaseName')
+          [ -n "$rn" ] && RELEASE_NAME="$rn"
+        fi
+
+        # Inputs override json (only service-account-json and package-name)
+        [ -n "${IN_SA:-}" ] && SERVICE_ACCOUNT_JSON="$IN_SA"
+        [ -n "${IN_PKG:-}" ] && PACKAGE_NAME="$IN_PKG"
+
+        # Required values validation
+        missing=()
+        [ -z "$SERVICE_ACCOUNT_JSON" ] && missing+=(service-account-json)
+        [ -z "$PACKAGE_NAME" ] && missing+=(package-name)
+        if [ ${#missing[@]} -gt 0 ]; then
+          echo "::error::Missing required upload values: ${missing[*]} (provide inputs or android.json)."
+          exit 1
+        fi
+
+        echo "service_account_json<<EOF" >> "$GITHUB_OUTPUT"; echo "$SERVICE_ACCOUNT_JSON" >> "$GITHUB_OUTPUT"; echo "EOF" >> "$GITHUB_OUTPUT"
+        echo "package_name=$PACKAGE_NAME" >> "$GITHUB_OUTPUT"
+        echo "track=$TRACK" >> "$GITHUB_OUTPUT"
+        echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+        echo "priority=$PRIORITY" >> "$GITHUB_OUTPUT"
+        echo "whats_new_dir=$WHATS_NEW_DIR" >> "$GITHUB_OUTPUT"
+        echo "changes_not_sent=$CHANGES_NOT_SENT" >> "$GITHUB_OUTPUT"
+        echo "app_artifact_path=$APP_ARTIFACT_PATH" >> "$GITHUB_OUTPUT"
+        echo "debug_symbols_artifact_name=$DEBUG_SYMBOLS_ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
+        echo "debug_symbols_path=$DEBUG_SYMBOLS_PATH" >> "$GITHUB_OUTPUT"
+        echo "release_file=$RELEASE_FILE" >> "$GITHUB_OUTPUT"
+        echo "release_name=$RELEASE_NAME" >> "$GITHUB_OUTPUT"
+        echo "app_artifact_name=$APP_ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
     - name: 'Download Android App Artifact'
       uses: actions/download-artifact@v4
       with:
-        name: 'android'
-        path: 'android/_artifacts'
+        name: ${{ steps.android_up.outputs.app_artifact_name }}
+        path: ${{ steps.android_up.outputs.app_artifact_path }}
 
     - name: 'Download Debug Symbols Artifact'
       uses: actions/download-artifact@v4
       with:
-        name: 'android-debug-symbols'
-        path: ${{ inputs.debug-symbols-path }}
+        name: ${{ steps.android_up.outputs.debug_symbols_artifact_name }}
+        path: ${{ steps.android_up.outputs.debug_symbols_path }}
 
     - name: 'List Downloaded Artifacts'
       shell: bash
       run: |
-        ls -la ${{ inputs.app-artifact-path }} || true
-        ls -la ${{ inputs.debug-symbols-path }} || true
+        ls -la ${{ steps.android_up.outputs.app_artifact_path }} || true
+        ls -la ${{ steps.android_up.outputs.debug_symbols_path }} || true
 
     - name: 'Upload Android Application Bundle'
       uses: r0adkll/upload-google-play@v1
       with:
-        serviceAccountJsonPlainText: ${{ inputs.service-account-json }}
-        packageName: ${{ inputs.package-name }}
-        releaseFiles: ${{ inputs.release-file }}
-        track: ${{ inputs.track }}
-        status: ${{ inputs.status }}
-        inAppUpdatePriority: ${{ inputs['in-app-update-priority'] }}
-        whatsNewDirectory: ${{ inputs.whats-new-directory }}
-        debugSymbols: ${{ inputs.debug-symbols-path }}
-        changesNotSentForReview: ${{ inputs.changes-not-sent-for-review }}
-        releaseName: ${{ inputs.release-name }}
+        serviceAccountJsonPlainText: ${{ steps.android_up.outputs.service_account_json }}
+        packageName: ${{ steps.android_up.outputs.package_name }}
+        releaseFiles: ${{ steps.android_up.outputs.release_file }}
+        track: ${{ steps.android_up.outputs.track }}
+        status: ${{ steps.android_up.outputs.status }}
+        inAppUpdatePriority: ${{ steps.android_up.outputs.priority }}
+        whatsNewDirectory: ${{ steps.android_up.outputs.whats_new_dir }}
+        debugSymbols: ${{ steps.android_up.outputs.debug_symbols_path }}
+        changesNotSentForReview: ${{ steps.android_up.outputs.changes_not_sent }}
+        releaseName: ${{ steps.android_up.outputs.release_name }}

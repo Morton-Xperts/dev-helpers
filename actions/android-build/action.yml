@@ -3,37 +3,59 @@ description: Build Android app bundle and upload artifacts
 
 inputs:
   env:
-    description: "App environment: 'staging' or 'production'"
+    description: "App environment: 'staging' or 'production' (overrides android.json)"
     required: false
-    default: 'staging'
-  aab-path:
-    description: 'Path to generated AAB file'
-    required: false
-    default: 'android/app/build/outputs/bundle/release/app-release.aab'
-  manifests-path:
-    description: 'Path to merged manifests dir'
-    required: false
-    default: 'android/app/build/intermediates/merged_manifests'
-  debug-symbols-path:
-    description: 'Path to debug symbols dir'
-    required: false
-    default: 'android/app/build/intermediates/merged_native_libs/release/out/lib'
-  app-artifact-name:
-    description: 'Name for the Android app artifact'
-    required: false
-    default: 'Android'
-  manifests-artifact-name:
-    description: 'Name for the merged manifests artifact'
-    required: false
-    default: 'MergedManifests'
-  debug-symbols-artifact-name:
-    description: 'Name for the debug symbols artifact'
-    required: false
-    default: 'DebugSymbols'
+    default: ''
 
 runs:
   using: 'composite'
   steps:
+    - name: Resolve Android build config from android.json
+      id: android_cfg
+      env:
+        IN_ENV: ${{ inputs.env }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        # Defaults
+        NODE_VERSION=18
+        ENV_NAME=staging
+        AAB_PATH='android/app/build/outputs/bundle/release/app-release.aab'
+        MANIFESTS_PATH='android/app/build/intermediates/merged_manifests'
+        DEBUG_PATH='android/app/build/intermediates/merged_native_libs/release/out/lib'
+        APP_ARTIFACT_NAME='android'
+        MANIFESTS_ARTIFACT_NAME='android-merged-manifests'
+        DEBUG_ARTIFACT_NAME='android-debug-symbols'
+
+        if [ -f android.json ]; then
+          v() { jq -r "$1 // empty" android.json 2>/dev/null || true; }
+          nv=$(v '.nodeVersion')
+          [ -n "$nv" ] && NODE_VERSION="$nv"
+          ap=$(v '.aabPath')
+          [ -n "$ap" ] && AAB_PATH="$ap"
+          mp=$(v '.manifestsPath')
+          [ -n "$mp" ] && MANIFESTS_PATH="$mp"
+          dp=$(v '.debugSymbolsPath')
+          [ -n "$dp" ] && DEBUG_PATH="$dp"
+          aan=$(v '.appArtifactName')
+          [ -n "$aan" ] && APP_ARTIFACT_NAME="$aan"
+          man=$(v '.manifestsArtifactName')
+          [ -n "$man" ] && MANIFESTS_ARTIFACT_NAME="$man"
+          dan=$(v '.debugSymbolsArtifactName')
+          [ -n "$dan" ] && DEBUG_ARTIFACT_NAME="$dan"
+        fi
+
+        # Input env overrides json
+        [ -n "${IN_ENV:-}" ] && ENV_NAME="$IN_ENV"
+
+        echo "node_version=$NODE_VERSION" >> "$GITHUB_OUTPUT"
+        echo "env_name=$ENV_NAME" >> "$GITHUB_OUTPUT"
+        echo "aab_path=$AAB_PATH" >> "$GITHUB_OUTPUT"
+        echo "manifests_path=$MANIFESTS_PATH" >> "$GITHUB_OUTPUT"
+        echo "debug_path=$DEBUG_PATH" >> "$GITHUB_OUTPUT"
+        echo "app_artifact_name=$APP_ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
+        echo "manifests_artifact_name=$MANIFESTS_ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
+        echo "debug_artifact_name=$DEBUG_ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
     - name: Set up JDK 17
       uses: actions/setup-java@v3
       with:
@@ -46,7 +68,7 @@ runs:
     - name: 'Install Node.js'
       uses: actions/setup-node@v3
       with:
-        node-version: 18
+        node-version: ${{ steps.android_cfg.outputs.node_version }}
 
     - name: 'Enable Corepack'
       shell: bash
@@ -54,10 +76,14 @@ runs:
 
     - name: 'Configure App Environment'
       shell: bash
-      env:
-        ENV: ${{ inputs.env == 'production' && 'production' || 'staging' }}
       run: |
-        printf "// THIS FILE IS AUTO GENERATED. DO NOT MANUALLY MODIFY.\nconst env = '%s';\nexport default env;\n" "$ENV" > env.js
+        ENV_NAME='${{ steps.android_cfg.outputs.env_name }}'
+        if [ "$ENV_NAME" = "production" ] || [ "$ENV_NAME" = "prod" ]; then
+          VAL="production"
+        else
+          VAL="staging"
+        fi
+        printf "// THIS FILE IS AUTO GENERATED. DO NOT MANUALLY MODIFY.\nconst env = '%s';\nexport default env;\n" "$VAL" > env.js
 
     - name: 'Run Build Script'
       shell: bash
@@ -67,17 +93,17 @@ runs:
     - name: 'Upload Merged Manifest Artifacts'
       uses: actions/upload-artifact@v4
       with:
-        name: 'android-merged-manifests'
-        path: ${{ inputs.manifests-path }}
+        name: ${{ steps.android_cfg.outputs.manifests_artifact_name }}
+        path: ${{ steps.android_cfg.outputs.manifests_path }}
 
     - name: 'Upload Debug Symbols Artifact'
       uses: actions/upload-artifact@v4
       with:
-        name: 'android-debug-symbols'
-        path: ${{ inputs.debug-symbols-path }}
+        name: ${{ steps.android_cfg.outputs.debug_artifact_name }}
+        path: ${{ steps.android_cfg.outputs.debug_path }}
 
     - name: 'Upload Android App Artifact'
       uses: actions/upload-artifact@v4
       with:
-        name: 'android'
-        path: ${{ inputs.aab-path }}
+        name: ${{ steps.android_cfg.outputs.app_artifact_name }}
+        path: ${{ steps.android_cfg.outputs.aab_path }}
