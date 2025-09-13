@@ -27,6 +27,13 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Make Recursive Symlink from Root to .xperts/dev-helpers
+        shell: bash
+        run: |
+          rm -rf .xperts/dev-helpers
+          mkdir -p .xperts
+          ln -s $PWD .xperts/dev-helpers
+
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
