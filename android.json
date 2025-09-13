@@ -19,6 +19,6 @@
   "releaseFile": "android/_artifacts/app-release.aab",
   "releaseName": "",
   "$": {
-    "specVersion": "0.11.0"
+    "specVersion": "0.12.0"
   }
 }
