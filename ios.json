@@ -1,6 +1,6 @@
 {
+  "specVersion": "0.0.0",
   "nodeVersion": "18",
-  "env": "prd",
   "buildScript": "scripts/build-ios.sh",
   "workspace": "MyApp.xcworkspace",
   "scheme": "Production",
@@ -15,8 +15,6 @@
   "appArtifactName": "iOS-app",
   "appStoreConnectUsername": "",
   "appStoreConnectPassword": "",
-  
-  // Signing (do NOT commit real secrets to version control)
   "certificateBase64": "",
   "p12Password": "",
   "provisioningProfilesBase64": "",

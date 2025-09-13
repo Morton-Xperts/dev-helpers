@@ -41,10 +41,32 @@ jobs:
           cache: 'yarn'
 
       - name: 'Increment Package Version'
+        id: version
         uses: ./.xperts/dev-helpers/actions/version-bump
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          bump-version: true
+          commit-and-push: false
 
-      - name: 'Get New Version'
-        id: version
-        uses: ./.xperts/dev-helpers/actions/version
+      - name: 'Apply Version to android.json'
+        uses: ./.xperts/dev-helpers/actions/apply-version
+        with:
+          version: ${{ steps.version.outputs.version }}
+          target-files: "android.json"
+          type: "json"
+          json-path: "$.specVersion"
+
+      - name: 'Apply Version to ios.json'
+        uses: ./.xperts/dev-helpers/actions/apply-version
+        with:
+          version: ${{ steps.version.outputs.version }}
+          target-files: "ios.json"
+          type: "json"
+          json-path: "$.specVersion"
+
+      - name: 'Increment Package Version'
+        uses: ./.xperts/dev-helpers/actions/version-bump
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          bump-version: false
+          commit-and-push: true
