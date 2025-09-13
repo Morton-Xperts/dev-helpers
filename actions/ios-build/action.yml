@@ -45,9 +45,6 @@ runs:
           # node version
           nv=$(v '.nodeVersion')
           [ -n "$nv" ] && NODE_VERSION="$nv"
-          # env name (dev/prd)
-          ev=$(v '.env')
-          [ -n "$ev" ] && ENV_NAME="$ev"
           # build script path
           bs=$(v '.buildScript')
           [ -n "$bs" ] && BUILD_SCRIPT="$bs"
@@ -58,7 +55,7 @@ runs:
           [ -n "$aan2" ] && APP_ARTIFACT_NAME="$aan2"
         fi
 
-        # If an input env is provided, it overrides ios.json
+        # If an input env is provided, use it (do not source from ios.json)
         if [ -n "${INPUT_ENV:-}" ]; then
           ENV_NAME="$INPUT_ENV"
         fi
