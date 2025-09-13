@@ -250,3 +250,16 @@ configure-superuser:
     @echo "Creating superuser, please ensure you enter password: ${DJANGO_SUPERUSER_PASSWORD} when prompted..."
     $DOCKER_COMPOSE exec web python3 manage.py createsuperuser --username "${DJANGO_SUPERUSER_USERNAME}" --email "${DJANGO_SUPERUSER_EMAIL}"
     @echo "Superuser created."
+
+# Regenerate Pipfile.lock inside a Python container
+[working-directory: 'backend']
+lock-backend python-version:
+    #/usr/bin/env bash
+    set -euo pipefail
+    echo "Locking backend dependencies with Python {{python-version}} in Docker..."
+    docker run --rm \
+      -v "$PWD":/app \
+      -w /app \
+      python:{{python-version}} \
+      bash -lc "python --version && pip install -q pipenv && pipenv lock --clear"
+    echo "Generated Pipfile.lock for Python {{python-version}}."
