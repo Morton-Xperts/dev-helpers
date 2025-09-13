@@ -40,7 +40,6 @@ runs:
 
   steps:
     - name: 'Configure Git'
-      if: ${{ inputs.commit-and-push == 'true' }}
       shell: bash
       env:
         COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
@@ -109,21 +108,21 @@ runs:
         print(new_version)
 
     - name: 'Commit new Package Version'
-      if: ${{ inputs.commit-and-push == 'true' && inputs.bump-version == 'true' }}
+      if: ${{ inputs.commit-and-push == 'true' }}
       shell: bash
       run: |
         PACKAGE_VERSION=$(jq -r ".version" ${{ inputs.package-file }})
         git commit -a -m "skip ci: version incremented to v$PACKAGE_VERSION [skip ci]"
 
     - name: 'Tag Sources'
-      if: ${{ inputs.commit-and-push == 'true' && inputs.bump-version == 'true' }}
+      if: ${{ inputs.commit-and-push == 'true' }}
       shell: bash
       run: |
         PACKAGE_VERSION=$(jq -r ".version" ${{ inputs.package-file }})
         git tag -a "v$PACKAGE_VERSION" -m "skip ci: version tagged as v$PACKAGE_VERSION [skip ci]"
 
     - name: 'Push Changes to Git'
-      if: ${{ inputs.commit-and-push == 'true' && inputs.bump-version == 'true' }}
+      if: ${{ inputs.commit-and-push == 'true' }}
       shell: bash
       run: |
         git push origin HEAD:${{ github.ref }} --force
@@ -137,7 +136,7 @@ runs:
         echo "version=$(echo $PACKAGE_VERSION)" >> $GITHUB_OUTPUT
 
     - name: 'Create Release'
-      if: ${{ inputs.commit-and-push == 'true' && inputs.bump-version == 'true' }}
+      if: ${{ inputs.commit-and-push == 'true' }}
       id: create_release
       uses: actions/create-release@v1
       env:
