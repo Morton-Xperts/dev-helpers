@@ -302,3 +302,67 @@ clean-pods:
     pod install
     popd >/dev/null
     echo "Pods cleaned and reinstalled."
+
+
+# Create a .p12 from a certificate and matching private key
+make-p12 cert key name out pass="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if ! command -v openssl >/dev/null 2>&1; then
+      echo "Error: openssl is required." >&2
+      exit 1
+    fi
+    CERT="{{cert}}"
+    KEY="{{key}}"
+    NAME="{{name}}"
+    OUT="{{out}}"
+    P12_PASS="{{pass}}"
+    if [ ! -f "$CERT" ]; then
+      echo "Error: cert not found at $CERT" >&2
+      exit 1
+    fi
+    if [ ! -f "$KEY" ]; then
+      echo "Error: key not found at $KEY (you need the private key that matches the certificate's CSR)." >&2
+      exit 1
+    fi
+    if [ -z "$P12_PASS" ]; then
+      P12_PASS=$(openssl rand -base64 24)
+      echo "Generated p12 password." >&2
+    fi
+    mkdir -p "$(dirname "$OUT")"
+    echo "Creating PKCS#12 at $OUT ..."
+    openssl pkcs12 -export -inkey "$KEY" -in "$CERT" -out "$OUT" -name "$NAME" -passout pass:"$P12_PASS"
+    echo "Done."
+    echo
+    echo "p12 file:        $OUT"
+    echo "p12 password:    $P12_PASS"
+    echo
+    echo "To produce base64 for ios.json (certificateBase64):"
+    echo "  base64 < '$OUT' | tr -d '\n'"
+    echo
+    echo "Set ios.json keys:"
+    echo "  \"certificateBase64\": \"<output of base64 command>\","
+    echo "  \"p12Password\": \"$P12_PASS\""
+
+# Package provisioning profile(s) into a tar.gz for ios.json
+pack-profiles in out:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    IN="{{in}}"
+    OUT="{{out}}"
+    if [ ! -f "$IN" ]; then
+      echo "Error: provisioning profile not found at $IN" >&2
+      exit 1
+    fi
+    mkdir -p "$(dirname "$OUT")"
+    DIR=$(dirname "$IN")
+    FILE=$(basename "$IN")
+    echo "Creating archive $OUT from $IN ..."
+    tar -czf "$OUT" -C "$DIR" "$FILE"
+    echo "Done."
+    echo
+    echo "To produce base64 for ios.json (provisioningProfilesBase64):"
+    echo "  base64 < '$OUT' | tr -d '\n'"
+    echo
+    echo "Set ios.json keys:"
+    echo "  \"provisioningProfilesBase64\": \"<output of base64 command>\""
