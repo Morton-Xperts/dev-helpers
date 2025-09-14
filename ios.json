@@ -16,7 +16,9 @@
   "appStoreConnectUsername": "",
   "appStoreConnectPassword": "",
   "certificateBase64": "",
+  "certificatePath": "",
   "p12Password": "",
   "provisioningProfilesBase64": "",
+  "provisioningProfilesPath": "",
   "keychainPassword": ""
 }

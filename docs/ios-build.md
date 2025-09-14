@@ -24,13 +24,16 @@ All fields are optional; sensible defaults apply if a field is missing. Keys are
 - `appArtifactName`: Name of the uploaded app artifact (default `iOS-app`).
   
 ### App Store Connect (Upload)
+See: https://developer.apple.com/help/app-store-connect/get-started/app-store-connect-api/
 - `appStoreConnectUsername`: Apple ID used for App Store Connect.
 - `appStoreConnectPassword`: App-specific password for App Store Connect.
   
 ### Signing (Sensitive)
 - `certificateBase64`: Base64-encoded .p12 signing certificate.
+- `certificatePath`: Filesystem path to the `.p12` certificate (alternative to `certificateBase64`).
 - `p12Password`: Password for the .p12 certificate.
 - `provisioningProfilesBase64`: Base64-encoded tar.gz of provisioning profiles.
+- `provisioningProfilesPath`: Filesystem path to a `.tar.gz` containing provisioning profiles (alternative to `provisioningProfilesBase64`).
 - `keychainPassword`: Temporary keychain password used during codesigning.
 
 Security note: Avoid committing real secrets to version control. Prefer supplying these via Action inputs or generating 
@@ -54,8 +57,10 @@ Security note: Avoid committing real secrets to version control. Prefer supplyin
   "appArtifactName": "iOS-app",
   
   "certificateBase64": "",
+  "certificatePath": "",
   "p12Password": "",
   "provisioningProfilesBase64": "",
+  "provisioningProfilesPath": "",
   "keychainPassword": ""
 }
 ```
@@ -83,3 +88,12 @@ The script will:
 - `actions/ios-build` reads Node.js version, environment, script path, artifact names, and output locations from `ios.json` and uploads them automatically. Keep `ios/ExportOptions.plist` in place.
 - `actions/ios-upload` resolves the artifact path from `ios.json` and auto-detects the IPA filename when possible (or falls back to `applicationName.ipa`). You only need to provide `username` and `password`.
   - It also reads `artifact-name`, `username`, and `password` from `ios.json` if not provided as inputs.
+
+### Action Inputs (ios-build)
+- `env`: Overrides environment (`dev` or `prd`).
+- `certificate-base64`: Base64-encoded `.p12` certificate.
+- `certificate-path`: Path to `.p12` certificate (alternative to base64).
+- `p12-password`: Password for `.p12`.
+- `provisioning-profiles-base64`: Base64-encoded `.tar.gz` of profiles.
+- `provisioning-profiles-path`: Path to `.tar.gz` of profiles (alternative to base64).
+- `keychain-password`: Temporary keychain password.

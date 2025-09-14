@@ -14,8 +14,16 @@ inputs:
     description: 'Password for the .p12 certificate'
     required: false
     default: ''
+  certificate-path:
+    description: 'Path to .p12 signing certificate (alternative to base64)'
+    required: false
+    default: ''
   provisioning-profiles-base64:
     description: 'Base64-encoded tar.gz of provisioning profiles'
+    required: false
+    default: ''
+  provisioning-profiles-path:
+    description: 'Path to .tar.gz containing provisioning profiles (alternative to base64)'
     required: false
     default: ''
   keychain-password:
@@ -71,7 +79,9 @@ runs:
       env:
         IN_CERT: ${{ inputs.certificate-base64 }}
         IN_P12: ${{ inputs.p12-password }}
+        IN_CERT_PATH: ${{ inputs.certificate-path }}
         IN_PP: ${{ inputs.provisioning-profiles-base64 }}
+        IN_PP_PATH: ${{ inputs.provisioning-profiles-path }}
         IN_KEYCHAIN: ${{ inputs.keychain-password }}
       shell: bash
       run: |
@@ -90,6 +100,27 @@ runs:
         [ -z "$P12_PASS" ] && P12_PASS=$(val_from_json p12Password)
         [ -z "$PROFILES_BASE64" ] && PROFILES_BASE64=$(val_from_json provisioningProfilesBase64)
         [ -z "$KEYCHAIN_PASS" ] && KEYCHAIN_PASS=$(val_from_json keychainPassword)
+
+        # Fallback: allow file paths if base64 not provided (inputs override ios.json)
+        if [ -z "$CERT_BASE64" ]; then
+          CERT_PATH="${IN_CERT_PATH:-}"
+          if [ -z "$CERT_PATH" ]; then
+            CERT_PATH=$(val_from_json certificatePath)
+          fi
+          if [ -n "${CERT_PATH:-}" ] && [ -f "$CERT_PATH" ]; then
+            CERT_BASE64=$(base64 < "$CERT_PATH" | tr -d '\n')
+          fi
+        fi
+
+        if [ -z "$PROFILES_BASE64" ]; then
+          PROFILES_PATH="${IN_PP_PATH:-}"
+          if [ -z "$PROFILES_PATH" ]; then
+            PROFILES_PATH=$(val_from_json provisioningProfilesPath)
+          fi
+          if [ -n "${PROFILES_PATH:-}" ] && [ -f "$PROFILES_PATH" ]; then
+            PROFILES_BASE64=$(base64 < "$PROFILES_PATH" | tr -d '\n')
+          fi
+        fi
 
         # Validate
         missing=()
