@@ -3,33 +3,9 @@ description: Build iOS app and upload artifacts
 
 inputs:
   env:
-    description: "App environment: 'dev' or 'prd' (overrides ios.json)"
+    description: "App environment"
     required: false
-    default: 'prd'
-  certificate-base64:
-    description: 'Base64-encoded .p12 signing certificate'
-    required: false
-    default: ''
-  p12-password:
-    description: 'Password for the .p12 certificate'
-    required: false
-    default: ''
-  certificate-path:
-    description: 'Path to .p12 signing certificate (alternative to base64)'
-    required: false
-    default: ''
-  provisioning-profiles-base64:
-    description: 'Base64-encoded tar.gz of provisioning profiles'
-    required: false
-    default: ''
-  provisioning-profiles-path:
-    description: 'Path to .tar.gz containing provisioning profiles (alternative to base64)'
-    required: false
-    default: ''
-  keychain-password:
-    description: 'Temporary keychain password'
-    required: false
-    default: ''
+    default: 'staging'
 
 runs:
   using: 'composite'
@@ -44,7 +20,6 @@ runs:
         # Defaults if ios.json not provided
         NODE_VERSION="18"
         ENV_NAME="prd"
-        BUILD_SCRIPT="scripts/build-ios.sh"
         ARCHIVE_ARTIFACT_NAME="iOS-archive"
         APP_ARTIFACT_NAME="iOS-app"
 
@@ -53,9 +28,6 @@ runs:
           # node version
           nv=$(v '.nodeVersion')
           [ -n "$nv" ] && NODE_VERSION="$nv"
-          # build script path
-          bs=$(v '.buildScript')
-          [ -n "$bs" ] && BUILD_SCRIPT="$bs"
           # artifact names
           aan=$(v '.archiveArtifactName')
           [ -n "$aan" ] && ARCHIVE_ARTIFACT_NAME="$aan"
@@ -70,77 +42,14 @@ runs:
 
         echo "node_version=$NODE_VERSION" >> "$GITHUB_OUTPUT"
         echo "env_name=$ENV_NAME" >> "$GITHUB_OUTPUT"
-        echo "build_script=$BUILD_SCRIPT" >> "$GITHUB_OUTPUT"
         echo "archive_artifact_name=$ARCHIVE_ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
         echo "app_artifact_name=$APP_ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
 
-    - name: Resolve signing secrets (inputs override ios.json)
-      id: ios_secrets
-      env:
-        IN_CERT: ${{ inputs.certificate-base64 }}
-        IN_P12: ${{ inputs.p12-password }}
-        IN_CERT_PATH: ${{ inputs.certificate-path }}
-        IN_PP: ${{ inputs.provisioning-profiles-base64 }}
-        IN_PP_PATH: ${{ inputs.provisioning-profiles-path }}
-        IN_KEYCHAIN: ${{ inputs.keychain-password }}
-      shell: bash
-      run: |
-        set -euo pipefail
-        val_from_json() {
-          local key="$1"; [ -f ios.json ] || { echo ""; return; }
-          jq -r --arg k "$key" '.[$k] // empty' ios.json 2>/dev/null || true
-        }
-
-        CERT_BASE64="${IN_CERT:-}"
-        P12_PASS="${IN_P12:-}"
-        PROFILES_BASE64="${IN_PP:-}"
-        KEYCHAIN_PASS="${IN_KEYCHAIN:-}"
-
-        [ -z "$CERT_BASE64" ] && CERT_BASE64=$(val_from_json certificateBase64)
-        [ -z "$P12_PASS" ] && P12_PASS=$(val_from_json p12Password)
-        [ -z "$PROFILES_BASE64" ] && PROFILES_BASE64=$(val_from_json provisioningProfilesBase64)
-        [ -z "$KEYCHAIN_PASS" ] && KEYCHAIN_PASS=$(val_from_json keychainPassword)
-
-        # Fallback: allow file paths if base64 not provided (inputs override ios.json)
-        if [ -z "$CERT_BASE64" ]; then
-          CERT_PATH="${IN_CERT_PATH:-}"
-          if [ -z "$CERT_PATH" ]; then
-            CERT_PATH=$(val_from_json certificatePath)
-          fi
-          if [ -n "${CERT_PATH:-}" ] && [ -f "$CERT_PATH" ]; then
-            CERT_BASE64=$(base64 < "$CERT_PATH" | tr -d '\n')
-          fi
-        fi
-
-        if [ -z "$PROFILES_BASE64" ]; then
-          PROFILES_PATH="${IN_PP_PATH:-}"
-          if [ -z "$PROFILES_PATH" ]; then
-            PROFILES_PATH=$(val_from_json provisioningProfilesPath)
-          fi
-          if [ -n "${PROFILES_PATH:-}" ] && [ -f "$PROFILES_PATH" ]; then
-            PROFILES_BASE64=$(base64 < "$PROFILES_PATH" | tr -d '\n')
-          fi
-        fi
-
-        # Validate
-        missing=()
-        [ -z "$CERT_BASE64" ] && missing+=(certificate-base64)
-        [ -z "$P12_PASS" ] && missing+=(p12-password)
-        [ -z "$PROFILES_BASE64" ] && missing+=(provisioning-profiles-base64)
-        [ -z "$KEYCHAIN_PASS" ] && missing+=(keychain-password)
-        if [ ${#missing[@]} -gt 0 ]; then
-          echo "::error::Missing required signing values: ${missing[*]}. Provide inputs or ios.json fields."
-          exit 1
-        fi
-
-        echo "cert_base64<<EOF" >> "$GITHUB_OUTPUT"; echo "$CERT_BASE64" >> "$GITHUB_OUTPUT"; echo "EOF" >> "$GITHUB_OUTPUT"
-        echo "p12_password=$P12_PASS" >> "$GITHUB_OUTPUT"
-        echo "profiles_base64<<EOF" >> "$GITHUB_OUTPUT"; echo "$PROFILES_BASE64" >> "$GITHUB_OUTPUT"; echo "EOF" >> "$GITHUB_OUTPUT"
-        echo "keychain_password=$KEYCHAIN_PASS" >> "$GITHUB_OUTPUT"
-
     - name: 'Enable Corepack'
       shell: bash
-      run: corepack enable
+      run: |
+        echo "(deprecated here) corepack is enabled by the recipe."
+        true
 
     - name: Install Node.js
       uses: actions/setup-node@v3
@@ -157,55 +66,12 @@ runs:
         restore-keys: |
           ${{ runner.os }}-pods-
 
-    - name: Install Apple certificate and provisioning profiles
-      shell: bash
-      env:
-        BUILD_CERTIFICATE_BASE64: ${{ steps.ios_secrets.outputs.cert_base64 }}
-        P12_PASSWORD: ${{ steps.ios_secrets.outputs.p12_password }}
-        PROVISION_PROFILES_BASE64: ${{ steps.ios_secrets.outputs.profiles_base64 }}
-        KEYCHAIN_PASSWORD: ${{ steps.ios_secrets.outputs.keychain_password }}
-      run: |
-        CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
-        PP_ARCHIVE=$RUNNER_TEMP/mobile_pp.tgz
-        KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
-
-        echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o $CERTIFICATE_PATH
-        echo -n "$PROVISION_PROFILES_BASE64" | base64 --decode -o $PP_ARCHIVE
-
-        security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-        security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
-        security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-
-        security import $CERTIFICATE_PATH -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
-        security list-keychain -d user -s $KEYCHAIN_PATH
-
-        mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-        tar xzvf $PP_ARCHIVE -C $RUNNER_TEMP
-        for PROVISION in `ls $RUNNER_TEMP/*.mobileprovision`; do
-          UUID=`/usr/libexec/PlistBuddy -c 'Print :UUID' /dev/stdin <<< $(security cms -D -i $PROVISION)`
-          cp $PROVISION ~/Library/MobileDevice/Provisioning\ Profiles/$UUID.mobileprovision
-        done
-        security find-identity -v -p codesigning
-        ls -l ~/Library/MobileDevice/Provisioning\ Profiles
-
-    - name: Configure app environment
-      shell: bash
-      run: |
-        # Map env name from ios.json (prd/dev) to value used in code
-        ENV_NAME='${{ steps.ios_cfg.outputs.env_name }}'
-        if [ "$ENV_NAME" = "prd" ] || [ "$ENV_NAME" = "production" ]; then
-          VAL="production"
-        else
-          VAL="development"
-        fi
-        printf "// THIS FILE IS AUTO GENERATED. DO NOT MANUALLY MODIFY.\nconst env = '%s';\nexport default env;\n" "$VAL" > env.js
-
-    - name: Run build script
+    - name: 'Run ios-build recipe'
       shell: bash
       env:
         NODE_OPTIONS: --openssl-legacy-provider
       run: |
-        sh ${{ steps.ios_cfg.outputs.build_script }}
+        just build-ios env='${{ steps.ios_cfg.outputs.env_name }}'
 
     - name: Resolve iOS output paths from ios.json
       id: ios_paths

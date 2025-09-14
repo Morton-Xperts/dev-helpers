@@ -1,6 +1,6 @@
 # iOS Build Configuration (ios.json)
 
-`scripts/build-ios.sh` reads its parameters from a JSON file at the repo root named `ios.json`. This lets you customize the iOS build without editing the script.
+The `ios-build` Just recipe reads its parameters from a JSON file at the repo root named `ios.json`. This lets you customize the iOS build without editing code.
 
 ## Requirements
 - `jq` must be installed (used to parse `ios.json`).
@@ -10,7 +10,6 @@
 All fields are optional; sensible defaults apply if a field is missing. Keys are case-sensitive.
 
 - `nodeVersion`: Node.js version for CI setup (e.g., `18`).
-- `buildScript`: Path to the build script (default `scripts/build-ios.sh`).
 - `workspace`: Xcode workspace filename (e.g., `MyApp.xcworkspace`).
 - `scheme`: Xcode scheme to build (e.g., `Production`).
 - `targetSdk`: SDK for the initial build (e.g., `iphonesimulator` or `iphoneos`).
@@ -43,7 +42,6 @@ Security note: Avoid committing real secrets to version control. Prefer supplyin
 ```
 {
   "nodeVersion": "18",
-  "buildScript": "scripts/build-ios.sh",
   "workspace": "MyApp.xcworkspace",
   "scheme": "Production",
   "targetSdk": "iphonesimulator",
@@ -66,10 +64,10 @@ Security note: Avoid committing real secrets to version control. Prefer supplyin
 ```
 
 ## Defaults (if ios.json is absent)
-- `workspace`: `polished_truth_42233.xcworkspace`
+- `workspace`: `my_app.xcworkspace`
 - `scheme`: `Production`
 - `targetSdk`: `iphonesimulator16.4`
-- `releaseBuildDir`: `/tmp/NaborApp/build`
+- `releaseBuildDir`: `/tmp/MyApp/build`
 - `archivePath`: `build/Archive/<scheme>.xcarchive`
 - `exportOptionsPlist`: `ExportOptions.plist`
 - `exportPath`: `build/App`
@@ -77,23 +75,17 @@ Security note: Avoid committing real secrets to version control. Prefer supplyin
 ## Usage
 Run from the repository root:
 ```
-sh scripts/build-ios.sh
+just ios-build env=prd
 ```
-The script will:
+The recipe will:
 - Install CocoaPods (`pod install`) in the `ios/` directory.
 - Build via `xcodebuild` using values from `ios.json`.
 - Archive and export the app to the configured `exportPath`.
 
 ## GitHub Actions Integration
-- `actions/ios-build` reads Node.js version, environment, script path, artifact names, and output locations from `ios.json` and uploads them automatically. Keep `ios/ExportOptions.plist` in place.
+- `actions/ios-build` reads Node.js version, environment, artifact names, and output locations from `ios.json` and uploads them automatically. The action delegates building and signing to the `ios-build` recipe. Keep `ios/ExportOptions.plist` in place.
 - `actions/ios-upload` resolves the artifact path from `ios.json` and auto-detects the IPA filename when possible (or falls back to `applicationName.ipa`). You only need to provide `username` and `password`.
   - It also reads `artifact-name`, `username`, and `password` from `ios.json` if not provided as inputs.
 
 ### Action Inputs (ios-build)
 - `env`: Overrides environment (`dev` or `prd`).
-- `certificate-base64`: Base64-encoded `.p12` certificate.
-- `certificate-path`: Path to `.p12` certificate (alternative to base64).
-- `p12-password`: Password for `.p12`.
-- `provisioning-profiles-base64`: Base64-encoded `.tar.gz` of profiles.
-- `provisioning-profiles-path`: Path to `.tar.gz` of profiles (alternative to base64).
-- `keychain-password`: Temporary keychain password.

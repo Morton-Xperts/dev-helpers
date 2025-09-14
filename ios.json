@@ -1,7 +1,6 @@
 {
   "specVersion": "0.21.0",
   "nodeVersion": "18",
-  "buildScript": "scripts/build-ios.sh",
   "workspace": "MyApp.xcworkspace",
   "scheme": "Production",
   "targetSdk": "iphonesimulator",
