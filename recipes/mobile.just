@@ -58,7 +58,7 @@ configure-app env:
         ;;
       qa|staging|stage)
         echo "Configuring app for qa"
-        FLAVOR="qa"
+        FLAVOR="staging"
         ;;
       prod|production|prd)
         echo "Configuring app for production"
