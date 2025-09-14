@@ -1,7 +1,7 @@
 #/!/usr/bin/env just
 
 # Build iOS app (mirrors actions/ios-build without artifact uploads)
-ios-build env="prd":
+ios-build env="staging":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -57,7 +57,7 @@ ios-build env="prd":
     echo "  export path:      $EXPORT_PATH"
 
     # Configure app environment centrally
-    just configure-app env="{{env}}"
+    just configure-app "{{env}}"
 
     # Resolve signing secrets
     CERT_BASE64=$(read_json certificateBase64)

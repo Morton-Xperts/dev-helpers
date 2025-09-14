@@ -89,7 +89,7 @@ build-android env="staging":
     corepack enable || true
 
     # Configure app environment via recipe
-    just configure-app env="$ENV_NAME"
+    just configure-app "$ENV_NAME"
 
     # Run the build
     echo "This script will build the Android app."
@@ -106,9 +106,9 @@ build-android env="staging":
     echo "Installing yarn dependencies..."
     yarn install --frozen-lockfile
     # Get @react-native-community/cli-platform-android version from package.json
-    RN_CLI_PLATFORM_ANDROID_VERSION=$(node -p "require('./package.json')['dependencies']['@react-native-community/cli-platform-android']")
+    # RN_CLI_PLATFORM_ANDROID_VERSION=$(node -p "require('./package.json')['dependencies']['@react-native-community/cli-platform-android']")
     # Install @react-native-community/cli-platform-android
-    yarn add @react-native-community/cli-platform-android@$RN_CLI_PLATFORM_ANDROID_VERSION
+    # yarn add @react-native-community/cli-platform-android@$RN_CLI_PLATFORM_ANDROID_VERSION
 
     #############################################
     # Set up variables & files
