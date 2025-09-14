@@ -1,0 +1,204 @@
+name: deploy
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: 'Version'
+        required: true
+        type: string
+      environment:
+        description: 'Environment'
+        required: true
+        type: string
+        default: dev
+      backend_deploy_enabled:
+        description: 'Deploy backend'
+        required: false
+        type: boolean
+        default: true
+      android_build_enabled:
+        description: 'Build Android app'
+        required: false
+        type: boolean
+        default: false
+      ios_build_enabled:
+        description: 'Build iOS app'
+        required: false
+        type: boolean
+        default: false
+      upload_to_google_play:
+        description: 'Upload Android bundle to Google Play'
+        required: false
+        type: boolean
+        default: false
+      upload_to_apple_app_store:
+        description: 'Upload iOS build to App Store Connect'
+        required: false
+        type: boolean
+        default: false
+
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version'
+        required: true
+        type: string
+      environment:
+        description: 'Environment'
+        required: true
+        type: string
+        default: dev
+      backend_deploy_enabled:
+        description: 'Deploy backend'
+        required: false
+        type: boolean
+        default: true
+      android_build_enabled:
+        description: 'Build Android app'
+        required: false
+        type: boolean
+        default: false
+      ios_build_enabled:
+        description: 'Build iOS app'
+        required: false
+        type: boolean
+        default: false
+      upload_to_google_play:
+        description: 'Upload Android bundle to Google Play'
+        required: false
+        type: boolean
+        default: false
+      upload_to_apple_app_store:
+        description: 'Upload iOS build to App Store Connect'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  AZURE_REGISTRY_LOGIN_SERVER: ${{ vars.CUSTOMER_AZURE_REGISTRY_NAME }}.azurecr.io
+  IMAGE_NAME: ${{ vars.AZURE_APP_NAME }}
+
+jobs:
+
+  backend:
+    if: inputs.backend_deploy_enabled
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    permissions:
+      contents: write
+      id-token: write
+
+    steps:
+      - name: 'Download Source'
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: v${{ inputs.version }}
+          submodules: true
+
+      - name: 'Get Build Args'
+        id: get-build-args
+        uses: ./.xperts/dev-helpers/actions/get-build-args
+        with:
+          environment: ${{ inputs.environment }}
+
+      - name: 'Deploy App'
+        uses: ./.xperts/dev-helpers/actions/deploy
+        with:
+          environment: ${{ inputs.environment }}
+          version: ${{ inputs.version }}
+          acr-login-server: ${{ vars.CUSTOMER_AZURE_REGISTRY_NAME }}.azurecr.io
+          acr-username: ${{ secrets.CUSTOMER_ACR_USERNAME }}
+          acr-password: ${{ secrets.CUSTOMER_ACR_PASSWORD }}
+          image-name: ${{ vars.AZURE_RESOURCE_GROUP_NAME }}
+          build-args: |
+            ${{ secrets.BUILD_ARGS }}
+            ${{ steps.env_build_args.outputs.env_file_build_args }}
+          azure-credentials: ${{ secrets.CUSTOMER_AZURE_CREDENTIALS }}
+          azure-app-name: ${{ vars.AZURE_APP_NAME }}
+          azure-resource-group-name: ${{ vars.AZURE_RESOURCE_GROUP_NAME }}
+
+  android-bundle:
+    if: inputs.android_build_enabled == true
+    runs-on: macos-latest
+    environment: android
+
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: 'Checkout'
+        uses: actions/checkout@v3
+        with:
+          ref: v${{ inputs.version }}
+          submodules: true
+
+      - name: 'Android Build'
+        uses: ./.xperts/dev-helpers/actions/android-build
+        with:
+          env: ${{ inputs.environment == 'staging' && 'staging' || 'production' }}
+
+  android-upload:
+    if: inputs.upload_to_google_play == true
+    runs-on: macos-latest
+    environment: google-play
+    needs: [android-bundle]
+
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: 'Checkout'
+        uses: actions/checkout@v3
+        with:
+          ref: v${{ inputs.version }}
+          submodules: true
+
+      - name: 'Upload to Google Play'
+        uses: ./.xperts/dev-helpers/actions/android-upload
+
+  ios-bundle:
+    if: inputs.ios_build_enabled == true
+    runs-on: macos-latest
+    environment: ios
+
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ inputs.ref }}
+          submodules: true
+
+      - name: iOS build
+        uses: ./.xperts/dev-helpers/actions/ios-build
+        with:
+          env: ${{ inputs.environment == 'staging' && 'staging' || 'production' }}
+
+  ios-upload:
+    if: inputs.upload_to_apple_app_store == true
+    runs-on: macos-latest
+    environment: apple-app-store
+    needs: [ios-bundle]
+
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ inputs.ref }}
+          submodules: true
+
+      - name: Upload to App Store Connect
+        if: startsWith(inputs.ref, 'v')
+        uses: ./.xperts/dev-helpers/actions/ios-upload

@@ -1,0 +1,85 @@
+name: build
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  AZURE_REGISTRY_LOGIN_SERVER: ${{ vars.CUSTOMER_AZURE_REGISTRY_NAME }}.azurecr.io
+  IMAGE_NAME: ${{ vars.AZURE_APP_NAME }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+
+    permissions:
+      contents: write
+      packages: write
+
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
+    steps:
+      - name: 'Download Source'
+        uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          submodules: true
+
+      - name: 'Update Xperts Dev Helpers'
+        uses: ./.xperts/dev-helpers/actions/update-submodule
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repo: Morton-Xperts/dev-helpers
+          path: .xperts/dev-helpers
+          branch: main
+
+      - name: 'Enable Corepack'
+        run: corepack enable
+
+      - name: 'Set up Node.js'
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ vars.NODE_VERSION }}
+          cache: 'yarn'
+
+      - name: 'Increment Package Version'
+        id: version
+        uses: './.xperts/dev-helpers/actions/version-bump'
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          bump-version: true
+          commit-and-push: false
+
+      - name: 'Apply Version Updates to All Relevant Files'
+        uses: './custom-actions/apply-version-updates'
+        with:
+          version: ${{ steps.version.outputs.version }}
+
+      - name: 'Commit Package Version'
+        uses: './.xperts/dev-helpers/actions/version-bump'
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          bump-version: false
+          commit-and-push: true
+
+  deploy-staging:
+    needs: [build]
+    uses: './.github/workflows/deploy.yml'
+    secrets: inherit
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+    with:
+      environment: 'staging'
+      version: ${{ needs.build.outputs.version }}
+      backend_deploy_enabled: true
+      android_build_enabled: true
+      upload_to_google_play: false
+      ios_build_enabled: true
+      upload_to_apple_app_store: false
