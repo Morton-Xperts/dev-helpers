@@ -65,6 +65,7 @@ runs:
         echo "artifact_name=$ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
         echo "username=$USERNAME" >> "$GITHUB_OUTPUT"
         echo "password=$PASSWORD" >> "$GITHUB_OUTPUT"
+
     - name: Download iOS app artifact
       uses: actions/download-artifact@v4
       with:
