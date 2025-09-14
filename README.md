@@ -35,5 +35,5 @@ The bump level is inferred from the commit message prefix:
 
 ## Contributing
 - Follow the style enforced by Prettier/ESLint.
-- Keep recipes concise and cross-platform where possible; add domain-specific steps under the relevant `recipes/_*.just` file.
-- For new tasks, prefer adding a `recipes/_<domain>.just` entry and referencing existing helpers.
+- Keep recipes concise and cross-platform where possible; add domain-specific steps under the relevant `recipes/*.just` file.
+- For new tasks, prefer adding a `recipes/<domain>.just` entry and referencing existing helpers.
