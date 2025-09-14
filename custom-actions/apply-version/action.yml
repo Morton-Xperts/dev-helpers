@@ -1,0 +1,89 @@
+name: 'Apply Version Updates'
+description: |
+  Applies the version from input to a specified files
+
+inputs:
+  version:
+    description: 'The version to apply (in semantic versioning format [x.x.x])'
+    required: true
+
+runs:
+  using: "composite"
+
+  steps:
+    - name: 'Apply Version to Django'
+      uses: ./.xperts/dev-helpers/actions/apply-version
+      with:
+        version: ${{ inputs.version }}
+        target-files: backend/polished_truth_42233/settings.py
+        type: regex
+        regex-replace: APP_VERSION = '([0-9]+\.[0-9]+\.[0-9]+)'
+        regex-group: 1
+
+    - name: 'Apply Version to Frontend Package File'
+      uses: ./.xperts/dev-helpers/actions/apply-version
+      with:
+        version: ${{ inputs.version }}
+        target-files: backend/web_app/package.json
+        type: json
+        json-path: .version
+
+    - name: 'Apply Version to Modules Package File'
+      uses: ./.xperts/dev-helpers/actions/apply-version
+      with:
+        version: ${{ inputs.version }}
+        target-files: modules/package.json
+        type: json
+        json-path: .version
+
+    - name: 'Apply Version to Store Package File'
+      uses: ./.xperts/dev-helpers/actions/apply-version
+      with:
+        version: ${{ inputs.version }}
+        target-files: store/package.json
+        type: json
+        json-path: .version
+
+    - name: 'Apply Version to Screens Package File'
+      uses: ./.xperts/dev-helpers/actions/apply-version
+      with:
+        version: ${{ inputs.version }}
+        target-files: screens/package.json
+        type: json
+        json-path: .version
+
+    - name: 'Apply Version to iOS'
+      uses: ./.xperts/dev-helpers/actions/apply-version
+      with:
+        version: ${{ inputs.version }}
+        target-files: ios/polished_truth_42233.xcodeproj/project.pbxproj
+        type: regex
+        regex-replace: MARKETING_VERSION = ([0-9]+\.[0-9]+\.[0-9]+);
+        regex-group: 1
+
+    - name: 'Apply Version to iOS plist'
+      uses: ./.xperts/dev-helpers/actions/apply-version
+      with:
+        version: ${{ inputs.version }}
+        target-files: ios/polished_truth_42233/Info.plist
+        type: regex
+        regex-replace: <string>([0-9]+\.[0-9]+\.[0-9]+)</string>
+        regex-group: 1
+
+    - name: 'Apply Version to Android'
+      uses: ./.xperts/dev-helpers/actions/apply-version
+      with:
+        version: ${{ inputs.version }}
+        target-files: android/app/build.gradle
+        type: regex
+        regex-replace: versionName '([0-9]+\.[0-9]+\.[0-9]+)'
+        regex-group: 1
+
+    - name: 'Increment Android Version Code'
+      uses: ./.xperts/dev-helpers/actions/incrementer
+      with:
+        increment-by: 1
+        target-files: android/app/build.gradle
+        type: regex
+        regex-replace: versionCode ([0-9]+)
+        regex-group: 1
