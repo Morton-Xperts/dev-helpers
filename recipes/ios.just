@@ -148,7 +148,7 @@ build-ios env="staging":
               if [ -f "$podspec" ]; then
                 [ -f "${podspec}.orig" ] || cp "$podspec" "${podspec}.orig"
                 echo " - boost@$ver -> $url"
-                URL="$url" SHASUM="$checksum" perl -0777 -pe "s/(:http\\s*=>\\s*)'[^']*'/$1'\$ENV{URL}'/e; if (\$ENV{SHASUM}) { s/(:sha256\\s*=>\\s*)'[^']*'/$1'\$ENV{SHASUM}'/e }" "${podspec}.orig" > "$podspec"
+                URL="$url" SHASUM="$checksum" perl -0777 -pe "s/(:http\\s*=>\\s*)'[^']*'/\\$1'\$ENV{URL}'/e; if (\$ENV{SHASUM}) { s/(:sha256\\s*=>\\s*)'[^']*'/\\$1'\$ENV{SHASUM}'/e }" "${podspec}.orig" > "$podspec"
               else
                 echo "Warning: boost podspec not found at $podspec; skipping" >&2
               fi
@@ -161,7 +161,7 @@ build-ios env="staging":
                 if [[ "$url" =~ \.(zip|tar\.gz|tgz|tar\.bz2)$ ]] && [ -n "$checksum" ]; then
                   URL="$url" SHASUM="$checksum" perl -0777 -pe "s/spec\\.source\s*=\s*\{[^}]*\}/spec.source = { :http => '\$ENV{URL}',\n                  :sha256 => '\$ENV{SHASUM}' }/s" "${podspec}.orig" > "$podspec"
                 else
-                  URL="$url" perl -0777 -pe "s/(:git\\s*=>\\s*)'[^']*'/$1'\$ENV{URL}'/e" "${podspec}.orig" > "$podspec"
+                  URL="$url" perl -0777 -pe "s/(:git\\s*=>\\s*)'[^']*'/\\$1'\$ENV{URL}'/e" "${podspec}.orig" > "$podspec"
                 fi
               else
                 echo "Warning: glog podspec not found at $podspec; skipping" >&2
@@ -175,7 +175,7 @@ build-ios env="staging":
                 if [[ "$url" =~ \.(zip|tar\.gz|tgz|tar\.bz2)$ ]] && [ -n "$checksum" ]; then
                   URL="$url" SHASUM="$checksum" perl -0777 -pe "s/spec\\.source\s*=\s*\{[^}]*\}/spec.source = { :http => '\$ENV{URL}',\n                  :sha256 => '\$ENV{SHASUM}' }/s" "${podspec}.orig" > "$podspec"
                 else
-                  URL="$url" perl -0777 -pe "s/(:git\\s*=>\\s*)'[^']*'/$1'\$ENV{URL}'/e" "${podspec}.orig" > "$podspec"
+                  URL="$url" perl -0777 -pe "s/(:git\\s*=>\\s*)'[^']*'/\\$1'\$ENV{URL}'/e" "${podspec}.orig" > "$podspec"
                 fi
               else
                 echo "Warning: DoubleConversion podspec not found at $podspec; skipping" >&2
@@ -189,7 +189,7 @@ build-ios env="staging":
                 if [[ "$url" =~ \.(zip|tar\.gz|tgz|tar\.bz2)$ ]] && [ -n "$checksum" ]; then
                   URL="$url" SHASUM="$checksum" perl -0777 -pe "s/spec\\.source\s*=\s*\{[^}]*\}/spec.source = { :http => '\$ENV{URL}',\n                  :sha256 => '\$ENV{SHASUM}' }/s" "${podspec}.orig" > "$podspec"
                 else
-                  URL="$url" perl -0777 -pe "s/(:git\\s*=>\\s*)'[^']*'/$1'\$ENV{URL}'/e" "${podspec}.orig" > "$podspec"
+                  URL="$url" perl -0777 -pe "s/(:git\\s*=>\\s*)'[^']*'/\\$1'\$ENV{URL}'/e" "${podspec}.orig" > "$podspec"
                 fi
               else
                 echo "Warning: RCT-Folly podspec not found at $podspec; skipping" >&2
