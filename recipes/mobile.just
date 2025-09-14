@@ -1,10 +1,6 @@
 #/!/usr/bin/env just
 
 # Generate an RSA 2048 private key and CSR using OpenSSL
-# Params:
-#   email: User email address (required)
-#   cn:    Common Name, e.g., "Your Name Dev Key" (required)
-#   out:   Output directory (optional; defaults to current directory)
 create-csr email cn out=".":
     #!/usr/bin/env bash
     set -euo pipefail
