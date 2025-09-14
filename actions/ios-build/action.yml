@@ -67,7 +67,7 @@ runs:
         restore-keys: |
           ${{ runner.os }}-pods-
 
-    - name: 'Run ios-build recipe'
+    - name: 'Run build-ios recipe'
       shell: bash
       env:
         NODE_OPTIONS: --openssl-legacy-provider

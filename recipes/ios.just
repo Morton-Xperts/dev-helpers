@@ -1,7 +1,7 @@
 #/!/usr/bin/env just
 
 # Build iOS app (mirrors actions/ios-build without artifact uploads)
-ios-build env="staging":
+build-ios env="staging":
     #!/usr/bin/env bash
     set -euo pipefail
 
