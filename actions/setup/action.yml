@@ -1,0 +1,18 @@
+name: 'Set up CI Environment'
+description: |
+  Set up the CI environment for building, testing, and deploying the project.
+
+inputs:
+  github-token:
+    description: |
+      GitHub token for pushing to the registry
+    required: true
+
+runs:
+  using: 'composite'
+
+  steps:
+    - name: 'Set up Just'
+      uses: extractions/setup-just@v3
+      with:
+        github-token: ${{ inputs.github-token }}
