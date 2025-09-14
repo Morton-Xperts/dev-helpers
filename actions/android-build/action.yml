@@ -70,25 +70,10 @@ runs:
       with:
         node-version: ${{ steps.android_cfg.outputs.node_version }}
 
-    - name: 'Enable Corepack'
-      shell: bash
-      run: corepack enable
-
-    - name: 'Configure App Environment'
+    - name: 'Run android-build recipe'
       shell: bash
       run: |
-        ENV_NAME='${{ steps.android_cfg.outputs.env_name }}'
-        if [ "$ENV_NAME" = "production" ] || [ "$ENV_NAME" = "prod" ]; then
-          VAL="production"
-        else
-          VAL="staging"
-        fi
-        printf "// THIS FILE IS AUTO GENERATED. DO NOT MANUALLY MODIFY.\nconst env = '%s';\nexport default env;\n" "$VAL" > env.js
-
-    - name: 'Run Build Script'
-      shell: bash
-      run: |
-        sh ./scripts/build-android.sh
+        just android-build env='${{ steps.android_cfg.outputs.env_name }}'
 
     - name: 'Upload Merged Manifest Artifacts'
       uses: actions/upload-artifact@v4
