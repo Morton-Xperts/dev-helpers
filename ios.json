@@ -1,5 +1,5 @@
 {
-  "specVersion": "0.22.14",
+  "specVersion": "0.22.15",
   "nodeVersion": "18",
   "workspace": "MyApp.xcworkspace",
   "scheme": "Production",

@@ -1,5 +1,5 @@
 {
-  "specVersion": "0.22.14",
+  "specVersion": "0.22.15",
   "nodeVersion": "18",
   "aabPath": "android/app/build/outputs/bundle/release/app-release.aab",
   "manifestsPath": "android/app/build/intermediates/merged_manifests",
