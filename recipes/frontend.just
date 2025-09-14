@@ -16,7 +16,7 @@ start-frontend:
     echo "Frontend services started. Access the frontend at http://localhost:3000 or run 'just open-frontend' to open it in your browser."
 
 # Configure app environment (development, staging, production)
-configure-app env="":
+configure-app env:
     #!/usr/bin/env bash
     set -euo pipefail
     ARG="{{env}}"
