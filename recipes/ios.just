@@ -207,7 +207,8 @@ build-ios env="staging":
       echo "Using Bundler for CocoaPods (Gemfile at repo root)"
       BUNDLE_GEMFILE="../Gemfile" bundle install --quiet
       # Require CocoaPods >= 1.13.0 for visionOS DSL
-      CP_VERSION=$(BUNDLE_GEMFILE="../Gemfile" bundle exec pod --version)
+      # Workaround Ruby 3.2 + activesupport Logger constant issue by forcing stdlib logger to load
+      CP_VERSION=$(RUBYOPT="-rlogger ${RUBYOPT:-}" BUNDLE_GEMFILE="../Gemfile" bundle exec pod --version)
       REQ_CP_VERSION="1.13.0"
       if [ "$(printf '%s\n' "$CP_VERSION" "$REQ_CP_VERSION" | sort -V | head -n1)" != "$REQ_CP_VERSION" ]; then
         echo "Error: CocoaPods $CP_VERSION is too old. visionOS support requires >= $REQ_CP_VERSION." >&2
@@ -215,15 +216,15 @@ build-ios env="staging":
         exit 1
       fi
       # Install Pods with retry on checksum mismatches (e.g., boost)
-      if ! BUNDLE_GEMFILE="../Gemfile" bundle exec pod install; then
+      if ! RUBYOPT="-rlogger ${RUBYOPT:-}" BUNDLE_GEMFILE="../Gemfile" bundle exec pod install; then
         echo "pod install failed; cleaning caches and retrying with --repo-update..." >&2
         BUNDLE_GEMFILE="../Gemfile" bundle exec pod cache clean boost --all || true
         rm -rf ~/Library/Caches/CocoaPods || true
-        BUNDLE_GEMFILE="../Gemfile" bundle exec pod install --repo-update
+        RUBYOPT="-rlogger ${RUBYOPT:-}" BUNDLE_GEMFILE="../Gemfile" bundle exec pod install --repo-update
       fi
     else
       if command -v pod >/dev/null 2>&1; then
-        CP_VERSION=$(pod --version)
+        CP_VERSION=$(RUBYOPT="-rlogger ${RUBYOPT:-}" pod --version)
         REQ_CP_VERSION="1.13.0"
         if [ "$(printf '%s\n' "$CP_VERSION" "$REQ_CP_VERSION" | sort -V | head -n1)" != "$REQ_CP_VERSION" ]; then
           echo "Error: CocoaPods $CP_VERSION is too old. visionOS support requires >= $REQ_CP_VERSION." >&2
@@ -231,11 +232,11 @@ build-ios env="staging":
           exit 1
         fi
         # Install Pods with retry on checksum mismatches (e.g., boost)
-        if ! pod install; then
+        if ! RUBYOPT="-rlogger ${RUBYOPT:-}" pod install; then
           echo "pod install failed; cleaning caches and retrying with --repo-update..." >&2
           pod cache clean boost --all || true
           rm -rf ~/Library/Caches/CocoaPods || true
-          pod install --repo-update
+          RUBYOPT="-rlogger ${RUBYOPT:-}" pod install --repo-update
         fi
       else
         echo "Error: CocoaPods not found. Install via 'gem install cocoapods' or use Bundler: 'bundle install' then re-run." >&2
@@ -302,7 +303,6 @@ clean-pods:
     pod install
     popd >/dev/null
     echo "Pods cleaned and reinstalled."
-
 
 # Create a .p12 from a certificate and matching private key
 make-p12 cert key name out pass="":
