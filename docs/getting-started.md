@@ -17,7 +17,7 @@ This guide helps you run the stack locally using the provided Just recipes, Dock
 ## Project Layout
 - `backend/`: Django 2.2 API, admin, migrations. Environment via `backend/.env` and Docker Compose.
 - Root app: React Native + Web. Key dirs: `components/`, `screens/`, `modules/`, `store/`, `public/`.
-- Automation: `justfile` and `_*.just` recipes. CI/scripts in `scripts/` and `.github/`.
+- Automation: `justfile` and `recipes/*.just` recipes. CI/scripts in `scripts/` and `.github/`.
 - Tests: JS tests in `__tests__/`. Django tests under `backend/<app>/tests/`.
 
 ## First-Time Setup
@@ -72,4 +72,3 @@ This guide helps you run the stack locally using the provided Just recipes, Dock
 - Backend won’t start: run `just rebuild-backend` to force a clean build, or `just clean-backend` to reset containers and volumes, then `just run-backend`.
 - DB schema drift: re-run `just migrate`. If migrations pile up, consider `just squish-migrations` to squash within an app (review the generated file before committing).
 - Frontend API URL: ensure `REACT_APP_API_BASE_URL` points to `http://localhost:8000/api` for local dev.
-
