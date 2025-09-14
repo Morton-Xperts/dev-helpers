@@ -19,5 +19,6 @@
   "p12Password": "",
   "provisioningProfilesBase64": "",
   "provisioningProfilesPath": "",
-  "keychainPassword": ""
+  "keychainPassword": "",
+  "cocoapodsVersion": "1.13.0"
 }

@@ -28,6 +28,7 @@ build-ios env="staging":
     DEFAULT_APPLICATION_NAME="My App"
     DEFAULT_DEVELOPER_NAME="iPhone Distribution: XXX LLC (XXXXX)"
     DEFAULT_RELEASE_BUILDDIR="/tmp/MyApp/build"
+    DEFAULT_COCOAPODS_VERSION="1.13.0"
 
     WORKSPACE=$(read_json workspace);            WORKSPACE=${WORKSPACE:-$DEFAULT_WORKSPACE}
     TARGET_SDK=$(read_json targetSdk);           TARGET_SDK=${TARGET_SDK:-$DEFAULT_TARGET_SDK}
@@ -35,10 +36,20 @@ build-ios env="staging":
     APPLICATION_NAME=$(read_json applicationName); APPLICATION_NAME=${APPLICATION_NAME:-$DEFAULT_APPLICATION_NAME}
     DEVELOPER_NAME=$(read_json developerName);   DEVELOPER_NAME=${DEVELOPER_NAME:-$DEFAULT_DEVELOPER_NAME}
     RELEASE_BUILDDIR=$(read_json releaseBuildDir); RELEASE_BUILDDIR=${RELEASE_BUILDDIR:-$DEFAULT_RELEASE_BUILDDIR}
+    COCOAPODS_VERSION=$(read_json cocoapodsVersion); COCOAPODS_VERSION=${COCOAPODS_VERSION:-$DEFAULT_COCOAPODS_VERSION}
 
     ARCHIVE_PATH_JSON=$(read_json archivePath)
     EXPORT_OPTIONS_PLIST_JSON=$(read_json exportOptionsPlist)
     EXPORT_PATH_JSON=$(read_json exportPath)
+
+    # Ensure Ruby and CocoaPods
+    gem install bundler
+
+    # Install specified CocoaPods version
+    gem install cocoapods -v "$COCOAPODS_VERSION"
+
+    # Ensure Ruby and Bundler for CocoaPods
+    bundle install
 
     # Defaults are relative to the ios/ directory
     pushd ios >/dev/null
@@ -93,7 +104,12 @@ build-ios env="staging":
     echo -n "$CERT_BASE64" | base64 --decode -o "$CERTIFICATE_PATH"
     echo -n "$PROFILES_BASE64" | base64 --decode -o "$PP_ARCHIVE"
 
-    security create-keychain -p "$KEYCHAIN_PASS" "$KEYCHAIN_PATH"
+    # Create keychain if it doesn't already exist (idempotent)
+    if [ -e "$KEYCHAIN_PATH" ]; then
+      echo "Keychain already exists at $KEYCHAIN_PATH; skipping creation."
+    else
+      security create-keychain -p "$KEYCHAIN_PASS" "$KEYCHAIN_PATH"
+    fi
     security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
     security unlock-keychain -p "$KEYCHAIN_PASS" "$KEYCHAIN_PATH"
     security import "$CERTIFICATE_PATH" -P "$P12_PASS" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
@@ -111,11 +127,38 @@ build-ios env="staging":
 
     # Enable Corepack and install deps
     corepack enable || true
-    yarn install --frozen-lockfile
+    yarn install --immutable
 
     # Build, archive, export
     pushd ios >/dev/null
-    pod install
+    # Use Bundler-managed CocoaPods when available, else fall back
+    if command -v bundle >/dev/null 2>&1 && [ -f "../Gemfile" ]; then
+      echo "Using Bundler for CocoaPods (Gemfile at repo root)"
+      BUNDLE_GEMFILE="../Gemfile" bundle install --quiet
+      # Require CocoaPods >= 1.13.0 for visionOS DSL
+      CP_VERSION=$(BUNDLE_GEMFILE="../Gemfile" bundle exec pod --version)
+      REQ_CP_VERSION="1.13.0"
+      if [ "$(printf '%s\n' "$CP_VERSION" "$REQ_CP_VERSION" | sort -V | head -n1)" != "$REQ_CP_VERSION" ]; then
+        echo "Error: CocoaPods $CP_VERSION is too old. visionOS support requires >= $REQ_CP_VERSION." >&2
+        echo "Update with: BUNDLE_GEMFILE=Gemfile bundle update cocoapods" >&2
+        exit 1
+      fi
+      BUNDLE_GEMFILE="../Gemfile" bundle exec pod install
+    else
+      if command -v pod >/dev/null 2>&1; then
+        CP_VERSION=$(pod --version)
+        REQ_CP_VERSION="1.13.0"
+        if [ "$(printf '%s\n' "$CP_VERSION" "$REQ_CP_VERSION" | sort -V | head -n1)" != "$REQ_CP_VERSION" ]; then
+          echo "Error: CocoaPods $CP_VERSION is too old. visionOS support requires >= $REQ_CP_VERSION." >&2
+          echo "Update with: gem install cocoapods -v '>= 1.13.0'" >&2
+          exit 1
+        fi
+        pod install
+      else
+        echo "Error: CocoaPods not found. Install via 'gem install cocoapods' or use Bundler: 'bundle install' then re-run." >&2
+        exit 1
+      fi
+    fi
 
     xcodebuild \
       -workspace "${WORKSPACE}" \
