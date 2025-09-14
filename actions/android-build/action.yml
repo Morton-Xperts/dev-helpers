@@ -81,7 +81,7 @@ runs:
     - name: 'Run android-build recipe'
       shell: bash
       run: |
-        just build-android env='${{ steps.android_cfg.outputs.env_name }}'
+        just build-android "${{ steps.android_cfg.outputs.env_name }}"
 
     - name: 'Upload Merged Manifest Artifacts'
       uses: actions/upload-artifact@v4

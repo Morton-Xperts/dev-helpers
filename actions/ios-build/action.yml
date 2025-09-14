@@ -72,7 +72,7 @@ runs:
       env:
         NODE_OPTIONS: --openssl-legacy-provider
       run: |
-        just build-ios env='${{ steps.ios_cfg.outputs.env_name }}'
+        just build-ios "${{ steps.ios_cfg.outputs.env_name }}"
 
     - name: 'Resolve iOS output paths from ios.json'
       id: ios_paths
