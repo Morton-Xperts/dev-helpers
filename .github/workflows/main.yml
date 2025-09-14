@@ -52,7 +52,7 @@ jobs:
         uses: ./.xperts/dev-helpers/actions/apply-version
         with:
           version: ${{ steps.version.outputs.version }}
-          target-files: "android.json"
+          target-files: "resources/android.json"
           type: "json"
           json-path: "specVersion"
 
@@ -60,7 +60,7 @@ jobs:
         uses: ./.xperts/dev-helpers/actions/apply-version
         with:
           version: ${{ steps.version.outputs.version }}
-          target-files: "ios.json"
+          target-files: "resources/ios.json"
           type: "json"
           json-path: "specVersion"
 
