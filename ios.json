@@ -20,5 +20,11 @@
   "provisioningProfilesBase64": "",
   "provisioningProfilesPath": "",
   "keychainPassword": "",
-  "cocoapodsVersion": "1.13.0"
+  "cocoapodsVersion": "1.13.0",
+  "podSourceOverrides": {
+    "boost@1.76.0": {
+      "url": "https://archives.boost.io/release/1.76.0/source/boost_1_76_0.tar.bz2",
+      "checkSum": "9c2f4b99bc7ddb95a8babff8ba78a4108aa0951243ea919166a7e2e279825502"
+    }
+  }
 }

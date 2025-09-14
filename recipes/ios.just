@@ -77,6 +77,8 @@ build-ios env="staging":
     PROFILES_BASE64=$(read_json provisioningProfilesBase64)
     PROFILES_PATH=$(read_json provisioningProfilesPath)
     KEYCHAIN_PASS=$(read_json keychainPassword)
+    # Optional pod source override map from ios.json
+    # Format: { "podSourceOverrides": { "boost@1.76.0": { "url": "...", "checkSum": "..." } } }
 
     # Allow file path fallback when base64 not provided
     if [ -z "$CERT_BASE64" ] && [ -n "$CERT_PATH" ] && [ -f "$CERT_PATH" ]; then
@@ -131,6 +133,75 @@ build-ios env="staging":
 
     # Build, archive, export
     pushd ios >/dev/null
+    # Apply pod source overrides from ios.json (no repo changes, in-place during build)
+    if [ -f "../ios.json" ]; then
+      POD_OVERRIDES_JSON=$(jq -c '.podSourceOverrides // {}' ../ios.json)
+      if [ -n "$POD_OVERRIDES_JSON" ] && [ "$POD_OVERRIDES_JSON" != "{}" ]; then
+        echo "Applying pod source overrides from ios.json..."
+        echo "$POD_OVERRIDES_JSON" | jq -r 'to_entries[] | "\(.key)\t\(.value.url // "")\t\(.value.checkSum // .value.sha256 // "")"' |
+        while IFS=$'\t' read -r key url checksum; do
+          [ -n "$url" ] || { echo "Skipping override $key: missing url"; continue; }
+          name="${key%@*}"; ver="${key#*@}"
+          case "$name" in
+            boost)
+              podspec="../node_modules/react-native/third-party-podspecs/boost.podspec"
+              if [ -f "$podspec" ]; then
+                [ -f "${podspec}.orig" ] || cp "$podspec" "${podspec}.orig"
+                echo " - boost@$ver -> $url"
+                URL="$url" SHASUM="$checksum" perl -0777 -pe "s/(:http\\s*=>\\s*)'[^']*'/$1'\$ENV{URL}'/e; if (\$ENV{SHASUM}) { s/(:sha256\\s*=>\\s*)'[^']*'/$1'\$ENV{SHASUM}'/e }" "${podspec}.orig" > "$podspec"
+              else
+                echo "Warning: boost podspec not found at $podspec; skipping" >&2
+              fi
+              ;;
+            glog)
+              podspec="../node_modules/react-native/third-party-podspecs/glog.podspec"
+              if [ -f "$podspec" ]; then
+                [ -f "${podspec}.orig" ] || cp "$podspec" "${podspec}.orig"
+                echo " - glog@$ver -> $url"
+                if [[ "$url" =~ \.(zip|tar\.gz|tgz|tar\.bz2)$ ]] && [ -n "$checksum" ]; then
+                  URL="$url" SHASUM="$checksum" perl -0777 -pe "s/spec\\.source\s*=\s*\{[^}]*\}/spec.source = { :http => '\$ENV{URL}',\n                  :sha256 => '\$ENV{SHASUM}' }/s" "${podspec}.orig" > "$podspec"
+                else
+                  URL="$url" perl -0777 -pe "s/(:git\\s*=>\\s*)'[^']*'/$1'\$ENV{URL}'/e" "${podspec}.orig" > "$podspec"
+                fi
+              else
+                echo "Warning: glog podspec not found at $podspec; skipping" >&2
+              fi
+              ;;
+            DoubleConversion)
+              podspec="../node_modules/react-native/third-party-podspecs/DoubleConversion.podspec"
+              if [ -f "$podspec" ]; then
+                [ -f "${podspec}.orig" ] || cp "$podspec" "${podspec}.orig"
+                echo " - DoubleConversion@$ver -> $url"
+                if [[ "$url" =~ \.(zip|tar\.gz|tgz|tar\.bz2)$ ]] && [ -n "$checksum" ]; then
+                  URL="$url" SHASUM="$checksum" perl -0777 -pe "s/spec\\.source\s*=\s*\{[^}]*\}/spec.source = { :http => '\$ENV{URL}',\n                  :sha256 => '\$ENV{SHASUM}' }/s" "${podspec}.orig" > "$podspec"
+                else
+                  URL="$url" perl -0777 -pe "s/(:git\\s*=>\\s*)'[^']*'/$1'\$ENV{URL}'/e" "${podspec}.orig" > "$podspec"
+                fi
+              else
+                echo "Warning: DoubleConversion podspec not found at $podspec; skipping" >&2
+              fi
+              ;;
+            RCT-Folly)
+              podspec="../node_modules/react-native/third-party-podspecs/RCT-Folly.podspec"
+              if [ -f "$podspec" ]; then
+                [ -f "${podspec}.orig" ] || cp "$podspec" "${podspec}.orig"
+                echo " - RCT-Folly@$ver -> $url"
+                if [[ "$url" =~ \.(zip|tar\.gz|tgz|tar\.bz2)$ ]] && [ -n "$checksum" ]; then
+                  URL="$url" SHASUM="$checksum" perl -0777 -pe "s/spec\\.source\s*=\s*\{[^}]*\}/spec.source = { :http => '\$ENV{URL}',\n                  :sha256 => '\$ENV{SHASUM}' }/s" "${podspec}.orig" > "$podspec"
+                else
+                  URL="$url" perl -0777 -pe "s/(:git\\s*=>\\s*)'[^']*'/$1'\$ENV{URL}'/e" "${podspec}.orig" > "$podspec"
+                fi
+              else
+                echo "Warning: RCT-Folly podspec not found at $podspec; skipping" >&2
+              fi
+              ;;
+            *)
+              echo "Warning: override for unsupported pod '$name' is present; no handler implemented." >&2
+              ;;
+          esac
+        done
+      fi
+    fi
     # Use Bundler-managed CocoaPods when available, else fall back
     if command -v bundle >/dev/null 2>&1 && [ -f "../Gemfile" ]; then
       echo "Using Bundler for CocoaPods (Gemfile at repo root)"
@@ -143,7 +214,13 @@ build-ios env="staging":
         echo "Update with: BUNDLE_GEMFILE=Gemfile bundle update cocoapods" >&2
         exit 1
       fi
-      BUNDLE_GEMFILE="../Gemfile" bundle exec pod install
+      # Install Pods with retry on checksum mismatches (e.g., boost)
+      if ! BUNDLE_GEMFILE="../Gemfile" bundle exec pod install; then
+        echo "pod install failed; cleaning caches and retrying with --repo-update..." >&2
+        BUNDLE_GEMFILE="../Gemfile" bundle exec pod cache clean boost --all || true
+        rm -rf ~/Library/Caches/CocoaPods || true
+        BUNDLE_GEMFILE="../Gemfile" bundle exec pod install --repo-update
+      fi
     else
       if command -v pod >/dev/null 2>&1; then
         CP_VERSION=$(pod --version)
@@ -153,7 +230,13 @@ build-ios env="staging":
           echo "Update with: gem install cocoapods -v '>= 1.13.0'" >&2
           exit 1
         fi
-        pod install
+        # Install Pods with retry on checksum mismatches (e.g., boost)
+        if ! pod install; then
+          echo "pod install failed; cleaning caches and retrying with --repo-update..." >&2
+          pod cache clean boost --all || true
+          rm -rf ~/Library/Caches/CocoaPods || true
+          pod install --repo-update
+        fi
       else
         echo "Error: CocoaPods not found. Install via 'gem install cocoapods' or use Bundler: 'bundle install' then re-run." >&2
         exit 1
