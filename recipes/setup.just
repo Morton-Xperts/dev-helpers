@@ -6,24 +6,31 @@ init-from-crowdbotics:
 
     set -euo pipefail
 
-    # Copy resources to repo root without overwriting existing files
+    # Recursively copy resources to repo root without overwriting existing files
     SRC_DIR=".xperts/dev-helpers/resources"
     if [ -d "$SRC_DIR" ]; then
-        while IFS= read -r -d '' src; do
-            item="$(basename "$src")"
-            dest="./$item"
-            if [ -e "$dest" ]; then
-                echo "skip: $item exists"
-            else
-                if [ -d "$src" ]; then
-                    cp -R "$src" "$dest"
-                    echo "copied dir: $item"
-                else
-                    cp "$src" "$dest"
-                    echo "copied file: $item"
-                fi
+        # Ensure directory structure exists
+        while IFS= read -r -d '' d; do
+            rel="${d#"$SRC_DIR"/}"
+            [ -z "$rel" ] && continue
+            dest="./$rel"
+            if [ ! -d "$dest" ]; then
+                mkdir -p "$dest"
+                echo "created dir: $rel"
             fi
-        done < <(find "$SRC_DIR" -mindepth 1 -maxdepth 1 -print0)
+        done < <(find "$SRC_DIR" -type d -print0)
+
+        # Copy only files that do not already exist
+        while IFS= read -r -d '' f; do
+            rel="${f#"$SRC_DIR"/}"
+            dest="./$rel"
+            if [ -e "$dest" ]; then
+                echo "skip: $rel exists"
+            else
+                cp "$f" "$dest"
+                echo "copied file: $rel"
+            fi
+        done < <(find "$SRC_DIR" -type f -print0)
     else
         echo "No resources directory at $SRC_DIR"
     fi
