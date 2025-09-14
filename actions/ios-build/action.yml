@@ -10,7 +10,14 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Resolve iOS build config from ios.json
+    - name: 'Set up Just'
+      uses: extractions/setup-just@v3
+
+    - name: 'Enable Corepack'
+      shell: bash
+      run: corepack enable
+
+    - name: 'Resolve ios.json'
       id: ios_cfg
       env:
         INPUT_ENV: ${{ inputs.env }}
@@ -45,19 +52,13 @@ runs:
         echo "archive_artifact_name=$ARCHIVE_ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
         echo "app_artifact_name=$APP_ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
 
-    - name: 'Enable Corepack'
-      shell: bash
-      run: |
-        echo "(deprecated here) corepack is enabled by the recipe."
-        true
-
-    - name: Install Node.js
+    - name: 'Install Node.js'
       uses: actions/setup-node@v3
       with:
         node-version: ${{ steps.ios_cfg.outputs.node_version }}
         cache: 'yarn'
 
-    - name: Cache CocoaPods
+    - name: 'Cache CocoaPods'
       id: cocoapods-cache
       uses: actions/cache@v3
       with:
@@ -73,7 +74,7 @@ runs:
       run: |
         just build-ios env='${{ steps.ios_cfg.outputs.env_name }}'
 
-    - name: Resolve iOS output paths from ios.json
+    - name: 'Resolve iOS output paths from ios.json'
       id: ios_paths
       shell: bash
       run: |
@@ -96,13 +97,13 @@ runs:
         echo "archive_dir=$ARCHIVE_DIR" >> "$GITHUB_OUTPUT"
         echo "app_dir=$APP_DIR" >> "$GITHUB_OUTPUT"
 
-    - name: Upload intermediate archive artifact
+    - name: 'Upload Intermediate Archive Artifact'
       uses: actions/upload-artifact@v4
       with:
         name: ${{ steps.ios_cfg.outputs.archive_artifact_name }}
         path: ${{ steps.ios_paths.outputs.archive_dir }}
 
-    - name: Upload intermediate app artifact
+    - name: 'Upload Intermediate App Artifact'
       uses: actions/upload-artifact@v4
       with:
         name: ${{ steps.ios_cfg.outputs.app_artifact_name }}

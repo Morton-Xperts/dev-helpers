@@ -10,7 +10,14 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Resolve Android build config from android.json
+    - name: 'Set up Just'
+      uses: extractions/setup-just@v3
+
+    - name: 'Enable Corepack'
+      shell: bash
+      run: corepack enable
+
+    - name: 'Resolve android.json'
       id: android_cfg
       env:
         IN_ENV: ${{ inputs.env }}
@@ -56,7 +63,8 @@ runs:
         echo "app_artifact_name=$APP_ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
         echo "manifests_artifact_name=$MANIFESTS_ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
         echo "debug_artifact_name=$DEBUG_ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
-    - name: Set up JDK 17
+
+    - name: 'Set up JDK 17'
       uses: actions/setup-java@v3
       with:
         java-version: '17'
