@@ -1,0 +1,55 @@
+name: PR Lint
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, ready_for_review]
+
+jobs:
+  title_and_checklist:
+    name: Enforce title prefix and checklist
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR title prefix
+        if: ${{ !github.event.pull_request.draft }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          title='${{ github.event.pull_request.title }}'
+          echo "PR title: $title"
+          shopt -s nocasematch || true
+          if [[ "$title" =~ ^(major|minor|feat|refactor|patch|perf|docs|chore|style|fix|test|build|ops):[[:space:]].+ ]]; then
+            echo "Title prefix OK"
+          else
+            echo "::error::PR title must start with one of: major:, minor:, feat:, refactor:, patch:, perf:, docs:, chore:, style:, fix:, test:, build:, ops:"
+            echo "Found: '$title'"
+            exit 1
+          fi
+
+      - name: Check PR body checklist (prefix + ack)
+        if: ${{ !github.event.pull_request.draft }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          body='${{ github.event.pull_request.body }}'
+          # Normalize newlines
+          body="${body//$'\r\n'/$'\n'}"
+
+          # Only enforce if template markers are present
+          if echo "$body" | grep -qi 'PR Checklist'; then
+            if echo "$body" | grep -qiE '\- \[x\] +prefix:'; then
+              echo "Prefix checklist item checked."
+            else
+              echo "::error::Please check the 'prefix' item in the PR checklist."
+              exit 1
+            fi
+
+            if echo "$body" | grep -qiE '\- \[x\] +ack:'; then
+              echo "Acknowledgement item checked."
+            else
+              echo "::error::Please check the 'ack' item confirming the checklist is complete."
+              exit 1
+            fi
+          else
+            echo "Template markers not found; skipping checklist enforcement."
+          fi
+

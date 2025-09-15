@@ -1,0 +1,9 @@
+blank_issues_enabled: false
+
+# Add helpful links shown alongside the new issue chooser.
+# Uncomment and customize if useful.
+# contact_links:
+#   - name: Questions and help
+#     url: https://github.com/OWNER/REPO/discussions
+#     about: Please ask and answer questions here.
+

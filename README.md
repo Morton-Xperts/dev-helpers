@@ -37,3 +37,8 @@ The bump level is inferred from the commit message prefix:
 - Follow the style enforced by Prettier/ESLint.
 - Keep recipes concise and cross-platform where possible; add domain-specific steps under the relevant `recipes/*.just` file.
 - For new tasks, prefer adding a `recipes/<domain>.just` entry and referencing existing helpers.
+- Please review and abide by our `CODE_OF_CONDUCT.md` (enforcement contact: @rvajustin on GitHub).
+
+## Community
+- This project follows `CODE_OF_CONDUCT.md`. Please read it before participating in issues, discussions, and pull requests.
+- Enforcement contact: `@rvajustin` on GitHub. For sensitive matters, open an issue with minimal details and request private follow-up from `@rvajustin`.
