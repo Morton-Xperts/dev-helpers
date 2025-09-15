@@ -1,0 +1,40 @@
+name: 'Push'
+description: |
+  Pushes changes to the git repository
+
+inputs:
+  git-email:
+    description: 'Configured email address for git user'
+    default: 'github-actions@github.com'
+    required: false
+  git-name:
+    description: 'Configured name for git user'
+    default: 'github-actions'
+    required: false
+  github-token:
+    description: |
+      GitHub token for pushing to the registry
+    required: true
+
+outputs:
+  version:
+    description: 'The current package version (semver) from the package file'
+    value: ${{ steps.version.outputs.version }}
+
+runs:
+  using: "composite"
+
+  steps:
+    - name: 'Configure Git'
+      shell: bash
+      env:
+        COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+      run: |
+        git config --global user.email "${{ inputs.git-email }}"
+        git config --global user.name "${{ inputs.git-name }}"
+        git config --global push.followTags true
+
+    - name: 'Push Changes to Git'
+      shell: bash
+      run: |
+        git push origin HEAD:${{ github.ref }} --force
