@@ -55,7 +55,7 @@ squish-migrations:
 # Migrate the database schema to the latest version
 [working-directory: 'backend']
 migrate app="":
-    @just make-migrations "{{app}}"
+    @just -f ../justfile make-migrations {{app}}
     @echo "Running migrations..."
     $DOCKER_COMPOSE exec web python3 manage.py migrate {{app}}
 
@@ -68,8 +68,8 @@ make-migrations app="":
 # Migrate the database schema to the latest version and rebuild the backend
 [working-directory: 'backend']
 migrate-and-rebuild app="":
-    @just migrate "{{app}}"
-    @just rebuild-backend
+    @just -f ../justfile migrate "{{app}}"
+    @just -f ../justfile rebuild-backend
 
 # Create a superuser for the Django admin interface; credentials are taken from environment variables in .env
 [working-directory: 'backend']
@@ -173,9 +173,9 @@ configure superuser_password:
     # <postgres_pwd>
     # <random_string_goes_here>
     # <superuser_password>
-    @just replace-token ".env" "postgres_pwd" $(openssl rand -hex 8)
-    @just replace-token ".env" "random_string_goes_here" $(openssl rand -hex 16)
-    @just replace-token ".env" "superuser_password" "{{superuser_password}}"
+    @just -f ../justfile replace-token ".env" "postgres_pwd" $(openssl rand -hex 8)
+    @just -f ../justfile replace-token ".env" "random_string_goes_here" $(openssl rand -hex 16)
+    @just -f ../justfile replace-token ".env" "superuser_password" "{{superuser_password}}"
 
     # Create a local `.env.local` file if it doesn't exist
     if [ ! -f .env.local ]; then cp .env .env.local; fi
@@ -187,12 +187,12 @@ configure superuser_password:
     $DOCKER_COMPOSE up --detach --build
 
     # Run migrations and create the superuser
-    @just migrate
-    @just seed-backend
-    @just configure-superuser
+    @just -f ../justfile migrate
+    @just -f ../justfile seed-backend
+    @just -f ../justfile configure-superuser
 
     # Stop services to ensure they are ready for the next start
-    @just stop
+    @just -f ../justfile stop-backend
     @echo "Backend services started and database initialized; check the .env file for superuser credentials."
     @echo "To start the backend services, run 'just run-backend'."
 
@@ -216,7 +216,7 @@ stop-backend:
 clean-backend:
     #/usr/bin/env bash
     @echo "Cleaning up backend services..."
-    @just stop || echo "No services to stop."
+    @just -f ../justfile stop-backend || echo "No services to stop."
     $DOCKER_COMPOSE down --volumes --remove-orphans
     docker system prune --force --volumes
     docker volume prune --force
