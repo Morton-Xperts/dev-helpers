@@ -81,7 +81,6 @@ create-superuser:
 [working-directory: 'backend']
 run-backend:
     #/usr/bin/env bash
-    @just stop-backend
     @echo "Starting backend services..."
     $DOCKER_COMPOSE up -d
     @echo "Backend services started. Access the admin interface at http://localhost:8000/admin/ or run 'just open-admin' to open it in your browser."

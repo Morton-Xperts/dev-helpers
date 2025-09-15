@@ -22,8 +22,8 @@ This guide helps you run the stack locally using the provided Just recipes, Dock
 
 ## First-Time Setup
 1) Configure backend env and bootstrap containers
-- From the repo root: `just configure`
-  - Copies `backend/.env.example` to `backend/.env` (with tokens filled), builds containers, runs migrations, seeds data, and creates a superuser.
+   - From the repo root: `just configure`
+     - Copies `backend/.env.example` to `backend/.env` (with tokens filled), builds containers, runs migrations, seeds data, and creates a superuser.
 
 2) Start backend services
 - `just run-backend`
