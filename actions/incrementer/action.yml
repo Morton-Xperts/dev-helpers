@@ -87,7 +87,7 @@ runs:
 
         files = sorted(set(files))
         if not files:
-            print("::warn::No target files resolved from 'target-files' input.", file=sys.stderr)
+            print("::warn::No target files resolved from 'target-files' input.")
             sys.exit(0)
 
         out_path = "/tmp/apply-version-files.json"

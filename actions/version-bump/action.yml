@@ -68,7 +68,7 @@ runs:
         def bump(version: str, level: str) -> str:
             m = re.match(r"^(\d+)\.(\d+)\.(\d+)(.*)$", version)
             if not m:
-                print(f"Error: version '{version}' is not in expected x.y.z format", file=sys.stderr)
+                print(f"Error: version '{version}' is not in expected x.y.z format")
                 sys.exit(1)
             major, minor, patch, rest = m.groups()
             major, minor, patch = int(major), int(minor), int(patch)
@@ -84,18 +84,18 @@ runs:
         commit_message = os.environ.get("COMMIT_MESSAGE", "")
 
         if not pkg_path.exists():
-            print(f"Error: package file not found: {pkg_path}", file=sys.stderr)
+            print(f"Error: package file not found: {pkg_path}")
             sys.exit(1)
 
         try:
             data = json.loads(pkg_path.read_text(encoding="utf-8"))
         except Exception as e:
-            print(f"Error reading JSON from {pkg_path}: {e}", file=sys.stderr)
+            print(f"Error reading JSON from {pkg_path}: {e}")
             sys.exit(1)
 
         version = data.get("version")
         if not isinstance(version, str):
-            print("Error: 'version' not found in package file", file=sys.stderr)
+            print("Error: 'version' not found in package file")
             sys.exit(1)
 
         level = decide_level(commit_message)

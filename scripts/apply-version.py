@@ -25,9 +25,9 @@ SEMVER_NUMERIC_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)(?:$|-)")
 ENV_LINE_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
 
 
-def die(msg: str, code: int = 1) -> NoReturn:
-    print(msg, file=sys.stderr)
-    sys.exit(code)
+def die(msg: str) -> NoReturn:
+    print(msg)
+    sys.exit(0)
 
 
 def git_commit_short_hash() -> str:
