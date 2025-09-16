@@ -68,7 +68,6 @@ runs:
       id: resolve_files
       shell: bash
       run: |
-        set -euo pipefail
         RAW="${{ inputs.target-files }}"
 
         # Normalize separators to newlines
@@ -112,7 +111,6 @@ runs:
       if: ${{ inputs.type == 'json' }}
       shell: bash
       run: |
-        set -euo pipefail
         VERSION="${{ inputs.version }}"
         JSON_PATH="${{ inputs.json-path }}"
         FILES_JSON="/tmp/apply-version-files.json"
@@ -180,7 +178,6 @@ runs:
       if: ${{ inputs.type == 'regex' }}
       shell: bash
       run: |
-        set -euo pipefail
         VERSION="${{ inputs.version }}"
         PATTERN="${{ inputs.regex-replace }}"
         FLAGS="${{ inputs.regex-flags }}"
