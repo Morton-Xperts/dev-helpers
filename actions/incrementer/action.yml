@@ -58,7 +58,7 @@ runs:
       run: |
         INCREMENT_BY="${{ inputs.increment-by }}"
         if ! [[ "$INCREMENT_BY" =~ ^-?[0-9]+$ ]]; then
-          echo "::error::Invalid increment-by value '$INCREMENT_BY'. Must be an integer."
+          echo "::warn::Invalid increment-by value '$INCREMENT_BY'. Must be an integer."
           exit 1
         fi
         echo "Incrementing by $INCREMENT_BY"
@@ -87,7 +87,7 @@ runs:
 
         files = sorted(set(files))
         if not files:
-            print("::error::No target files resolved from 'target-files' input.", file=sys.stderr)
+            print("::warn::No target files resolved from 'target-files' input.", file=sys.stderr)
             sys.exit(0)
 
         out_path = "/tmp/apply-version-files.json"
@@ -172,7 +172,7 @@ runs:
                 with open(path, "r", encoding="utf-8") as f:
                     data = json.load(f)
             except Exception as e:
-                print(f"::error file={path}::Failed to load JSON: {e}")
+                print(f"::warn file={path}::Failed to load JSON: {e}")
                 continue
 
             try:
@@ -190,10 +190,10 @@ runs:
                     print(f"::notice file={path}::Updated {JSON_PATH} from {before!r} to {after!r}")
                     changed_files += 1
             except Exception as e:
-                print(f"::error file={path}::Failed to update path '{JSON_PATH}': {e}")
+                print(f"::warn file={path}::Failed to update path '{JSON_PATH}': {e}")
 
         if changed_files == 0:
-            print("::error::No files were updated in JSON mode.")
+            print("::warn::No files were updated in JSON mode.")
             sys.exit(1)
         PY
 
@@ -275,7 +275,7 @@ runs:
                 with open(path, "r", encoding="utf-8") as f:
                     original = f.read()
             except Exception as e:
-                print(f"::error file={path}::Failed to read file: {e}")
+                print(f"::warn file={path}::Failed to read file: {e}")
                 continue
 
             if global_flag:
@@ -296,11 +296,11 @@ runs:
                     print(f"::notice file={path}::Applied regex increment ({n} replacement{'s' if n!=1 else ''})")
                     total_files_changed += 1
                 except Exception as e:
-                    print(f"::error file={path}::Failed to write updated content: {e}")
+                    print(f"::warn file={path}::Failed to write updated content: {e}")
             else:
                 print(f"::notice file={path}::No matches or no change.")
 
         if total_files_changed == 0:
-            print("::error::No files were updated in regex mode.")
+            print("::warn::No files were updated in regex mode.")
             sys.exit(1)
         PY
