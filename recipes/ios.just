@@ -366,3 +366,20 @@ pack-profiles in out:
     echo
     echo "Set ios.json keys:"
     echo "  \"provisioningProfilesBase64\": \"<output of base64 command>\""
+
+fix-macos-keychain:
+    #!/usr/bin/env bash
+    echo "Restoring login.keychain-db as default user keychain..."
+    security default-keychain -d user -s login.keychain-db
+
+    echo "Restoring user keychain search list to login + System..."
+    security list-keychains -d user -s \
+      "$HOME/Library/Keychains/login.keychain-db" \
+      "/Library/Keychains/System.keychain"
+
+    echo "Unlocking login.keychain-db..."
+    security unlock-keychain "$HOME/Library/Keychains/login.keychain-db"
+
+    echo "Removing temporary signing keychain if it exists..."
+    TMP_KC=$(getconf DARWIN_USER_TEMP_DIR 2>/dev/null)app-signing.keychain-db
+    [ -f "$TMP_KC" ] && security delete-keychain "$TMP_KC" || true
