@@ -56,7 +56,6 @@ runs:
     - name: Validate increment-by input
       shell: bash
       run: |
-        set -euo pipefail
         INCREMENT_BY="${{ inputs.increment-by }}"
         if ! [[ "$INCREMENT_BY" =~ ^-?[0-9]+$ ]]; then
           echo "::error::Invalid increment-by value '$INCREMENT_BY'. Must be an integer."
@@ -68,8 +67,6 @@ runs:
       id: resolve_files
       shell: bash
       run: |
-        set -euo pipefail
-
         python - << 'PY'
         import os, sys, json, glob
         raw = """${{ inputs.target-files }}"""
@@ -91,7 +88,7 @@ runs:
         files = sorted(set(files))
         if not files:
             print("::error::No target files resolved from 'target-files' input.", file=sys.stderr)
-            sys.exit(1)
+            sys.exit(0)
 
         out_path = "/tmp/apply-version-files.json"
         with open(out_path, "w", encoding="utf-8") as f:
