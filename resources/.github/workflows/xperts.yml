@@ -1,6 +1,7 @@
 name: xperts
 
 on:
+  workflow_dispatch:
   workflow_call:
   schedule:
     - cron: "6 0 * * *"
