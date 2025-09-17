@@ -262,3 +262,12 @@ lock-backend python-version:
       python:{{python-version}} \
       bash -lc "python --version && pip install -q pipenv && pipenv lock --clear"
     echo "Generated Pipfile.lock for Python {{python-version}}."
+
+# Collect static files into the STATIC_ROOT directory
+[working-directory: 'backend']
+collect-static:
+    #/usr/bin/env bash
+    set -euo pipefail
+    echo "Collecting static files..."
+    $DOCKER_COMPOSE exec web python3 manage.py collectstatic --noinput
+    echo "Static files collected."
