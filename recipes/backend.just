@@ -71,12 +71,6 @@ migrate-and-rebuild app="":
     @just -f ../justfile migrate "{{app}}"
     @just -f ../justfile rebuild-backend
 
-# Create a superuser for the Django admin interface; credentials are taken from environment variables in .env
-[working-directory: 'backend']
-create-superuser:
-    @echo "Creating superuser..."
-    $DOCKER_COMPOSE exec web python3 manage.py createsuperuser
-
 # Run the application in a Docker container
 [working-directory: 'backend']
 run-backend:
@@ -188,7 +182,7 @@ configure superuser_password:
 
     # Run migrations and create the superuser
     @just -f ../justfile migrate
-    @just -f ../justfile seed-backend
+    @just -f ../justfile seed-backend || echo "Could not seed backend; continuing..."
     @just -f ../justfile configure-superuser
 
     # Stop services to ensure they are ready for the next start
@@ -248,6 +242,13 @@ configure-superuser:
     #/usr/bin/env bash
     @echo "Creating superuser, please ensure you enter password: ${DJANGO_SUPERUSER_PASSWORD} when prompted..."
     $DOCKER_COMPOSE exec web python3 manage.py createsuperuser --username "${DJANGO_SUPERUSER_USERNAME}" --email "${DJANGO_SUPERUSER_EMAIL}"
+    @echo "Superuser created."
+
+# Create a superuser for the Django admin interface; credentials are taken from environment variables in .env
+[working-directory: 'backend']
+create-superuser username email:
+    @echo "Creating superuser..."
+    $DOCKER_COMPOSE exec web python3 manage.py createsuperuser --username "{{username}}" --email "{{email}}"
     @echo "Superuser created."
 
 # Regenerate Pipfile.lock inside a Python container
