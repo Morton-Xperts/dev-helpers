@@ -100,11 +100,29 @@ build-ios env="staging":
 
     # Install certificate and provisioning profiles
     CERTIFICATE_PATH=$(mktemp -t build_certificate.XXXXXX.p12)
-    PP_ARCHIVE=$(mktemp -t mobile_pp.XXXXXX.tgz)
+    PP_PAYLOAD=$(mktemp -t mobile_pp.XXXXXX)
+    PP_EXTRACT_DIR=$(mktemp -d -t mobile_profiles.XXXXXX)
     KEYCHAIN_PATH=$TMPDIR/app-signing.keychain-db
 
     echo -n "$CERT_BASE64" | base64 --decode -o "$CERTIFICATE_PATH"
-    echo -n "$PROFILES_BASE64" | base64 --decode -o "$PP_ARCHIVE"
+    echo -n "$PROFILES_BASE64" | base64 --decode -o "$PP_PAYLOAD"
+
+    if tar tzf "$PP_PAYLOAD" >/dev/null 2>&1; then
+      tar xzf "$PP_PAYLOAD" -C "$PP_EXTRACT_DIR"
+    elif tar tf "$PP_PAYLOAD" >/dev/null 2>&1; then
+      tar xf "$PP_PAYLOAD" -C "$PP_EXTRACT_DIR"
+    else
+      PROFILE_BASENAME="${PROFILES_PATH##*/}"
+      if [ -z "$PROFILE_BASENAME" ] || [ "$PROFILE_BASENAME" = "$PROFILES_PATH" ]; then
+        PROFILE_BASENAME="profile.mobileprovision"
+      fi
+      case "$PROFILE_BASENAME" in
+        *.mobileprovision) ;;
+        *) PROFILE_BASENAME="${PROFILE_BASENAME%.*}.mobileprovision" ;;
+      esac
+      mv "$PP_PAYLOAD" "$PP_EXTRACT_DIR/$PROFILE_BASENAME"
+    fi
+    rm -f "$PP_PAYLOAD"
 
     # Create keychain if it doesn't already exist (idempotent)
     if [ -e "$KEYCHAIN_PATH" ]; then
@@ -118,8 +136,7 @@ build-ios env="staging":
     security list-keychain -d user -s "$KEYCHAIN_PATH"
 
     mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-    tar xzvf "$PP_ARCHIVE" -C "$TMPDIR"
-    for PROVISION in "$TMPDIR"/*.mobileprovision; do
+    for PROVISION in "$PP_EXTRACT_DIR"/*.mobileprovision; do
       [ -f "$PROVISION" ] || continue
       UUID=$(/usr/libexec/PlistBuddy -c 'Print :UUID' /dev/stdin <<< $(security cms -D -i "$PROVISION"))
       cp "$PROVISION" ~/Library/MobileDevice/Provisioning\ Profiles/$UUID.mobileprovision
