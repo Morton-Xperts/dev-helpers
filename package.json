@@ -3,7 +3,7 @@
   "description": "",
   "keywords": [],
   "author": "https://github.com/rvajustin",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "scripts": {
     "setup": "sh ./scripts/setup.sh"
   },
