@@ -48,7 +48,18 @@ jobs:
           bump-version: true
           commit-and-push: false
 
+      - name: 'Check Version Target Changes'
+        id: target_changes
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            android:
+              - 'resources/android.json'
+            ios:
+              - 'resources/ios.json'
+
       - name: 'Apply Version to android.json'
+        if: steps.target_changes.outputs.android == 'true'
         uses: ./.xperts/dev-helpers/actions/apply-version
         with:
           version: ${{ steps.version.outputs.version }}
@@ -57,6 +68,7 @@ jobs:
           json-path: "specVersion"
 
       - name: 'Apply Version to ios.json'
+        if: steps.target_changes.outputs.ios == 'true'
         uses: ./.xperts/dev-helpers/actions/apply-version
         with:
           version: ${{ steps.version.outputs.version }}
