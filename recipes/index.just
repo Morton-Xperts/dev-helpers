@@ -5,6 +5,7 @@ set quiet
 import "android.just"
 import "backend.just"
 import "chores.just"
+import "docker.just"
 import "frontend.just"
 import "git.just"
 import "ios.just"
