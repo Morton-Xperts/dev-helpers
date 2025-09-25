@@ -7,6 +7,10 @@ on:
         description: 'Push images to registry'
         type: boolean
         default: true
+  push:
+    paths:
+      - 'images/**'
+      - '.github/workflows/build-python-images.yml'
 
 env:
   REGISTRY: ghcr.io
