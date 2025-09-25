@@ -1,0 +1,9 @@
+#!/usr/bin/env just
+
+dotenv-filename := "./.xperts/dev-helpers/recipes/.env.shared"
+
+import './.xperts/dev-helpers/recipes/index.just'
+
+@default:
+    @echo "Available recipes:"
+    @just --choose
