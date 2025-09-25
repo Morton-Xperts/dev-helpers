@@ -155,24 +155,35 @@ choose-env:
     with open(src, 'r') as fsrc, open('.env', 'w') as fdst:
       fdst.write(fsrc.read())
 
+[private]
+set-env env_suffix:
+    #/usr/bin/env bash
+    if [ -f backend/.env ]; then rm backend/.env; fi
+    if [ ! -f backend/.env.{{env_suffix}} ]; then echo "backend/.env.{{env_suffix}} file not found!"; exit 1; fi
+    cp backend/.env.{{env_suffix}} backend/.env
+    @echo "Environment set to {{env_suffix}}"
+
 # Configures the local environment for the project
 [working-directory: 'backend']
-configure superuser_password:
+configure-local superuser_password:
     #/usr/bin/env bash
+    if [ -f .env.local ]; then echo ".env.local file already exists. Please delete it if you want to reconfigure."; exit 0; fi
 
     # Use `.env.example` to create `.env`
-    if [ ! -f .env ]; then echo ".env file not found. Creating it from .env.example..."; cp .env.example .env; fi
+    if [ ! -f .env.local ]; then echo ".env file not found. Creating it from .env.example..."; cp .env.example .env.local; fi
 
     # Update `.env` replacing the following with real values:
     # <postgres_pwd>
     # <random_string_goes_here>
     # <superuser_password>
-    @just -f ../justfile replace-token ".env" "postgres_pwd" $(openssl rand -hex 8)
-    @just -f ../justfile replace-token ".env" "random_string_goes_here" $(openssl rand -hex 16)
-    @just -f ../justfile replace-token ".env" "superuser_password" "{{superuser_password}}"
+    @just -f ../justfile replace-token "backend/.env.local" "postgres_pwd" $(openssl rand -hex 8)
+    @just -f ../justfile replace-token "backend/.env.local" "random_string_goes_here" $(openssl rand -hex 16)
+    @just -f ../justfile replace-token "backend/.env.local" "superuser_password" "{{superuser_password}}"
 
-    # Create a local `.env.local` file if it doesn't exist
-    if [ ! -f .env.local ]; then cp .env .env.local; fi
+# Configures the local environment for the project
+[working-directory: 'backend']
+configure superuser_password: (configure-local "{{superuser_password}}") (set-env "local")
+    #/usr/bin/env bash
 
     # Start the backend services for the first time
     @echo "Starting backend services for the first time..."
@@ -272,3 +283,17 @@ collect-static:
     echo "Collecting static files..."
     $DOCKER_COMPOSE exec web python3 manage.py collectstatic --noinput
     echo "Static files collected."
+
+# Run a query against the database
+[working-directory: 'backend']
+query sql:
+    #/usr/bin/env bash
+    set -euo pipefail
+    echo "Running SQL query..."
+    $DOCKER_COMPOSE exec postgres psql -U postgres -d postgres -c "{{sql}}"
+    echo "Query executed."
+
+set-db-timezone timezone:
+    @just query "ALTER SYSTEM SET timezone TO '{{timezone}}'; SELECT pg_reload_conf();"
+    @just query "SHOW TIME ZONE;"
+    @just query "SELECT EXTRACT(TIMEZONE FROM now());"
