@@ -130,3 +130,11 @@ build-android env="staging":
     echo "  AAB:        $AAB_PATH"
     echo "  Manifests:  $MANIFESTS_PATH"
     echo "  Debug libs: $DEBUG_PATH"
+
+# Uninstall Android app from connected device
+uninstall-android:
+    #!/usr/bin/env bash
+    echo "Uninstalling Android app from connected device..."
+    PACKAGE_NAME=$(xmllint --xpath 'string(//manifest/@package)' android/app/src/main/AndroidManifest.xml)
+    echo "Uninstalling package: $PACKAGE_NAME"
+    adb uninstall $PACKAGE_NAME || echo "Failed to uninstall app; it may not be installed."
