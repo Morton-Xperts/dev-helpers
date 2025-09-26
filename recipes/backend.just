@@ -264,16 +264,30 @@ create-superuser username email:
 
 # Regenerate Pipfile.lock inside a Python container
 [working-directory: 'backend']
-lock-backend python-version:
+lock-backend python-version="":
     #/usr/bin/env bash
     set -euo pipefail
-    echo "Locking backend dependencies with Python {{python-version}} in Docker..."
+
+    PY_VERSION="{{python-version}}"
+    if [ -z "$PY_VERSION" ]; then
+    if [ ! -f .python-version ]; then
+    echo "Error: Python version not provided and backend/.python-version not found." >&2
+    exit 1
+    fi
+    PY_VERSION=$(tr -d ' \t\r\n' < .python-version)
+    if [ -z "$PY_VERSION" ]; then
+    echo "Error: backend/.python-version is empty." >&2
+    exit 1
+    fi
+    fi
+
+    echo "Locking backend dependencies with Python $PY_VERSION in Docker..."
     docker run --rm \
       -v "$PWD":/app \
       -w /app \
-      python:{{python-version}} \
+      python:"$PY_VERSION" \
       bash -lc "python --version && pip install -q pipenv && pipenv lock --clear"
-    echo "Generated Pipfile.lock for Python {{python-version}}."
+    echo "Generated Pipfile.lock for Python $PY_VERSION."
 
 # Collect static files into the STATIC_ROOT directory
 [working-directory: 'backend']
