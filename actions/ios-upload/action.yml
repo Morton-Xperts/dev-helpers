@@ -137,6 +137,15 @@ runs:
         DIR="${{ inputs.artifact-path || steps.ios.outputs.artifact_path }}"
         FILE="${{ steps.ipa.outputs.file }}"
         set -euo pipefail
+        # Check for partial API key configuration
+        API_KEY_VARS_SET=0
+        [ -n "$APP_STORE_CONNECT_API_KEY_ID" ] && API_KEY_VARS_SET=$((API_KEY_VARS_SET+1))
+        [ -n "$APP_STORE_CONNECT_API_ISSUER" ] && API_KEY_VARS_SET=$((API_KEY_VARS_SET+1))
+        [ -n "$APP_STORE_CONNECT_API_KEY" ] && API_KEY_VARS_SET=$((API_KEY_VARS_SET+1))
+        if [ "$API_KEY_VARS_SET" -gt 0 ] && [ "$API_KEY_VARS_SET" -lt 3 ]; then
+          echo "::error::Partial App Store Connect API key configuration detected. Please provide all of api-key-id, api-issuer-id, and api-key."
+          exit 1
+        fi
         if [ -n "$APP_STORE_CONNECT_API_KEY_ID" ] && [ -n "$APP_STORE_CONNECT_API_ISSUER" ] && [ -n "$APP_STORE_CONNECT_API_KEY" ]; then
           KEY_DIR="${RUNNER_TEMP:-/tmp}/appstore-connect-keys"
           mkdir -p "$KEY_DIR"
