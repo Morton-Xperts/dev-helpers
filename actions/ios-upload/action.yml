@@ -10,6 +10,18 @@ inputs:
     description: 'App Store Connect app-specific password'
     required: false
     default: ''
+  api-key-id:
+    description: 'App Store Connect API key ID'
+    required: false
+    default: ''
+  api-issuer-id:
+    description: 'App Store Connect API issuer ID'
+    required: false
+    default: ''
+  api-key:
+    description: 'App Store Connect API private key (.p8 contents)'
+    required: false
+    default: ''
   artifact-name:
     description: 'Name of the iOS app artifact to download'
     required: false
@@ -54,17 +66,29 @@ runs:
         ARTIFACT_NAME="iOS-app"
         USERNAME=""
         PASSWORD=""
+        API_KEY_ID=""
+        API_ISSUER_ID=""
+        API_KEY_CONTENT=""
         if [ -f ios.json ]; then
           ART_NAME=$(jq -r '.appArtifactName // empty' ios.json)
-          U=$(jq -r '.appStoreConnectUsername // empty' ios.json)
-          P=$(jq -r '.appStoreConnectPassword // empty' ios.json)
+          U=$(jq -r '.appStoreConnect.username // empty' ios.json)
+          P=$(jq -r '.appStoreConnect.password // empty' ios.json)
+          KEY_ID=$(jq -r '.appStoreConnect.keyId // empty' ios.json)
+          ISSUER=$(jq -r '.appStoreConnect.issuerId // empty' ios.json)
+          KEY_CONTENT=$(jq -r '.appStoreConnect.privateKeyP8 // empty' ios.json)
           if [ -n "$ART_NAME" ]; then ARTIFACT_NAME="$ART_NAME"; fi
           if [ -n "$U" ]; then USERNAME="$U"; fi
           if [ -n "$P" ]; then PASSWORD="$P"; fi
+          if [ -n "$KEY_ID" ]; then API_KEY_ID="$KEY_ID"; fi
+          if [ -n "$ISSUER" ]; then API_ISSUER_ID="$ISSUER"; fi
+          if [ -n "$KEY_CONTENT" ]; then API_KEY_CONTENT="$KEY_CONTENT"; fi
         fi
         echo "artifact_name=$ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
         echo "username=$USERNAME" >> "$GITHUB_OUTPUT"
         echo "password=$PASSWORD" >> "$GITHUB_OUTPUT"
+        echo "api_key_id=$API_KEY_ID" >> "$GITHUB_OUTPUT"
+        echo "api_issuer_id=$API_ISSUER_ID" >> "$GITHUB_OUTPUT"
+        echo "api_key_content=$API_KEY_CONTENT" >> "$GITHUB_OUTPUT"
 
     - name: Download iOS app artifact
       uses: actions/download-artifact@v4
@@ -106,7 +130,24 @@ runs:
       env:
         APP_STORE_CONNECT_USERNAME: ${{ inputs.username || steps.ios2.outputs.username }}
         APP_STORE_CONNECT_PASSWORD: ${{ inputs.password || steps.ios2.outputs.password }}
+        APP_STORE_CONNECT_API_KEY_ID: ${{ inputs.api-key-id || steps.ios2.outputs.api_key_id }}
+        APP_STORE_CONNECT_API_ISSUER: ${{ inputs.api-issuer-id || steps.ios2.outputs.api_issuer_id }}
+        APP_STORE_CONNECT_API_KEY: ${{ inputs.api-key || steps.ios2.outputs.api_key_content }}
       run: |
         DIR="${{ inputs.artifact-path || steps.ios.outputs.artifact_path }}"
         FILE="${{ steps.ipa.outputs.file }}"
-        xcrun altool --upload-app -t ios -f "$DIR/$FILE" -u "$APP_STORE_CONNECT_USERNAME" -p "$APP_STORE_CONNECT_PASSWORD"
+        set -euo pipefail
+        if [ -n "$APP_STORE_CONNECT_API_KEY_ID" ] && [ -n "$APP_STORE_CONNECT_API_ISSUER" ] && [ -n "$APP_STORE_CONNECT_API_KEY" ]; then
+          KEY_DIR="${RUNNER_TEMP:-/tmp}/appstore-connect-keys"
+          mkdir -p "$KEY_DIR"
+          KEY_PATH="$KEY_DIR/AuthKey_${APP_STORE_CONNECT_API_KEY_ID}.p8"
+          printf '%s\n' "$APP_STORE_CONNECT_API_KEY" > "$KEY_PATH"
+          chmod 600 "$KEY_PATH"
+          export ALTOOL_API_PRIVATE_KEYS_DIR="$KEY_DIR"
+          xcrun altool --upload-app -t ios -f "$DIR/$FILE" --apiKey "$APP_STORE_CONNECT_API_KEY_ID" --apiIssuer "$APP_STORE_CONNECT_API_ISSUER"
+        elif [ -n "$APP_STORE_CONNECT_USERNAME" ] && [ -n "$APP_STORE_CONNECT_PASSWORD" ]; then
+          xcrun altool --upload-app -t ios -f "$DIR/$FILE" -u "$APP_STORE_CONNECT_USERNAME" -p "$APP_STORE_CONNECT_PASSWORD"
+        else
+          echo "::error::Could not find App Store Connect credentials. Provide API key or username/password."
+          exit 1
+        fi

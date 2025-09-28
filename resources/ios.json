@@ -12,11 +12,13 @@
   "exportPath": "build/App",
   "archiveArtifactName": "iOS-archive",
   "appArtifactName": "iOS-app",
-  "appStoreConnectUsername": "",
-  "appStoreConnectPassword": "",
-  "appStoreConnectIssuerId": "",
-  "appStoreConnectKeyId": "",
-  "appStoreConnectPrivateKeyP8": "",
+  "appStoreConnect": {
+    "username": "",
+    "password": "",
+    "issuerId": "",
+    "keyId": "",
+    "privateKeyP8": "-----BEGIN PRIVATE KEY-----\nMIGT...\n-----END PRIVATE KEY-----"
+  },
   "certificateBase64": "",
   "certificatePath": "",
   "p12Password": "",
