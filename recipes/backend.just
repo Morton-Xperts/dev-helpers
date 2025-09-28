@@ -112,6 +112,72 @@ rebuild-backend:
     $DOCKER_COMPOSE build --no-cache web
     $DOCKER_COMPOSE up -d
 
+# Create a Python virtual environment within the backend directory
+[working-directory: 'backend']
+create-venv name=".venv":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    if [ -d "{{name}}" ]; then
+      echo "Virtual environment '{{name}}' already exists at $(pwd)/{{name}}"
+      exit 0
+    fi
+
+    if ! command -v python3 >/dev/null 2>&1; then
+      echo "python3 is required but was not found in PATH" >&2
+      exit 1
+    fi
+
+    echo "Creating virtual environment '{{name}}' in $(pwd)"
+    python3 -m venv "{{name}}"
+
+    VENV_PY="$(pwd)/{{name}}/bin/python"
+
+    echo "Upgrading pip in the virtual environment..."
+    "$VENV_PY" -m pip install --upgrade pip setuptools wheel >/dev/null
+
+    if [ -f "requirements.txt" ]; then
+      echo "Installing dependencies from requirements.txt..."
+      "$VENV_PY" -m pip install -r requirements.txt
+    elif [ -f "requirements/local.txt" ]; then
+      echo "Installing dependencies from requirements/local.txt..."
+      "$VENV_PY" -m pip install -r requirements/local.txt
+    elif [ -f "Pipfile.lock" ]; then
+      echo "Installing dependencies from Pipfile.lock..."
+      "$VENV_PY" <<'PY'
+    import json
+    import subprocess
+    import sys
+
+    lock_path = 'Pipfile.lock'
+    with open(lock_path) as fh:
+        data = json.load(fh)
+
+    packages = []
+    for section in ('default', 'develop'):
+        for name, meta in data.get(section, {}).items():
+            extras = meta.get('extras')
+            markers = meta.get('markers')
+            version = meta.get('version', '')
+            pkg_name = name
+            if extras:
+                pkg_name += '[' + ','.join(extras) + ']'
+            spec = pkg_name + version
+            if markers:
+                spec += f"; {markers}"
+            packages.append(spec)
+
+    if packages:
+        subprocess.check_call([sys.executable, '-m', 'pip', 'install', *packages])
+    else:
+        print('No packages found in Pipfile.lock; skipping install')
+    PY
+    else
+      echo "No dependency manifest found. Virtual environment created without packages."
+    fi
+
+    echo "Virtual environment created. Activate it with 'source backend/{{name}}/bin/activate'"
+
 # Validates that specified Python packages can be imported
 [working-directory: 'backend']
 validate-packages imports:
