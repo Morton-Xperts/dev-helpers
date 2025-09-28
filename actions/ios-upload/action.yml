@@ -83,12 +83,18 @@ runs:
           if [ -n "$ISSUER" ]; then API_ISSUER_ID="$ISSUER"; fi
           if [ -n "$KEY_CONTENT" ]; then API_KEY_CONTENT="$KEY_CONTENT"; fi
         fi
-        echo "artifact_name=$ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
-        echo "username=$USERNAME" >> "$GITHUB_OUTPUT"
-        echo "password=$PASSWORD" >> "$GITHUB_OUTPUT"
-        echo "api_key_id=$API_KEY_ID" >> "$GITHUB_OUTPUT"
-        echo "api_issuer_id=$API_ISSUER_ID" >> "$GITHUB_OUTPUT"
-        echo "api_key_content=$API_KEY_CONTENT" >> "$GITHUB_OUTPUT"
+        {
+          echo "artifact_name=$ARTIFACT_NAME"
+          echo "username=$USERNAME"
+          echo "password=$PASSWORD"
+          echo "api_key_id=$API_KEY_ID"
+          echo "api_issuer_id=$API_ISSUER_ID"
+        } >> "$GITHUB_OUTPUT"
+        {
+          echo "api_key_content<<EOF"
+          printf '%s\n' "$API_KEY_CONTENT"
+          echo "EOF"
+        } >> "$GITHUB_OUTPUT"
 
     - name: Download iOS app artifact
       uses: actions/download-artifact@v4
