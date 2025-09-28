@@ -17,7 +17,7 @@
     "password": "",
     "issuerId": "",
     "keyId": "",
-    "privateKeyP8": "-----BEGIN PRIVATE KEY-----\nMIGT...\n-----END PRIVATE KEY-----"
+    "privateKeyP8": "-----BEGIN PRIVATE KEY-----\nMIGT==...\n-----END PRIVATE KEY-----"
   },
   "certificateBase64": "",
   "certificatePath": "",
