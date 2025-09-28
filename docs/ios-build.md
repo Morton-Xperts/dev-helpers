@@ -21,11 +21,7 @@ All fields are optional; sensible defaults apply if a field is missing. Keys are
 - `exportPath`: Output directory for the exported IPA (relative to `ios/`).
 - `archiveArtifactName`: Name of the uploaded archive artifact (default `iOS-archive`).
 - `appArtifactName`: Name of the uploaded app artifact (default `iOS-app`).
-  
-### App Store Connect (Upload)
-See: https://developer.apple.com/help/app-store-connect/get-started/app-store-connect-api/
-- `appStoreConnectUsername`: Apple ID used for App Store Connect.
-- `appStoreConnectPassword`: App-specific password for App Store Connect.
+- `appStoreConnect`: Object containing optional upload credentials. Provide either `username`/`password` (legacy login) or `issuerId`/`keyId`/`privateKeyP8` (API key workflow). See https://developer.apple.com/help/app-store-connect/get-started/app-store-connect-api/
   
 ### Signing (Sensitive)
 - `certificateBase64`: Base64-encoded .p12 signing certificate.
@@ -53,6 +49,13 @@ Security note: Avoid committing real secrets to version control. Prefer supplyin
   "exportPath": "build/App",
   "archiveArtifactName": "iOS-archive",
   "appArtifactName": "iOS-app",
+  "appStoreConnect": {
+    "username": "",
+    "password": "",
+    "issuerId": "",
+    "keyId": "",
+    "privateKeyP8": "-----BEGIN PRIVATE KEY-----\\n...\\n-----END PRIVATE KEY-----"
+  },
   
   "certificateBase64": "",
   "certificatePath": "",
@@ -84,8 +87,8 @@ The recipe will:
 
 ## GitHub Actions Integration
 - `actions/ios-build` reads Node.js version, environment, artifact names, and output locations from `ios.json` and uploads them automatically. The action delegates building and signing to the `ios-build` recipe. Keep `ios/ExportOptions.plist` in place.
-- `actions/ios-upload` resolves the artifact path from `ios.json` and auto-detects the IPA filename when possible (or falls back to `applicationName.ipa`). You only need to provide `username` and `password`.
-  - It also reads `artifact-name`, `username`, and `password` from `ios.json` if not provided as inputs.
+- `actions/ios-upload` resolves the artifact path from `ios.json` and auto-detects the IPA filename when possible (or falls back to `applicationName.ipa`). Supply either `appStoreConnect.username/password` or API key credentials under `appStoreConnect`.
+  - It also reads `artifact-name` and App Store Connect credentials from `ios.json` if not provided as inputs.
 
 ### Action Inputs (ios-build)
 - `env`: Overrides environment (`dev` or `prd`).

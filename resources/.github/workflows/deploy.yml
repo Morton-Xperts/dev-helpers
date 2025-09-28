@@ -202,3 +202,9 @@ jobs:
       - name: Upload to App Store Connect
         if: startsWith(inputs.ref, 'v')
         uses: ./.xperts/dev-helpers/actions/ios-upload
+        with:
+          username: ${{ secrets.APP_STORE_CONNECT_USERNAME }}
+          password: ${{ secrets.APP_STORE_CONNECT_PASSWORD }}
+          api-key-id: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          api-issuer-id: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+          api-key: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
