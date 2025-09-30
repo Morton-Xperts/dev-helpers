@@ -293,6 +293,54 @@ build-ios env="staging":
     echo "  Archive: $ARCHIVE_PATH"
     echo "  Export:  $EXPORT_PATH"
 
+# Update CocoaPods gem and lockfiles to match ios.json
+update-cocoapods:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    if ! command -v jq >/dev/null 2>&1; then
+      echo "Error: jq is required to read ios.json." >&2
+      exit 1
+    fi
+    if [ ! -f "ios.json" ]; then
+      echo "Error: ios.json not found. Run from the repository root." >&2
+      exit 1
+    fi
+
+    TARGET_VERSION=$(jq -r '.cocoapodsVersion // empty' ios.json)
+    if [ -z "$TARGET_VERSION" ]; then
+      echo "Error: cocoapodsVersion not set in ios.json." >&2
+      exit 1
+    fi
+
+    echo "Updating CocoaPods toolchain to $TARGET_VERSION"
+    gem install bundler
+    gem install cocoapods -v "$TARGET_VERSION"
+
+    if [ ! -f Gemfile ]; then
+      echo "Error: Gemfile not found. Run from the repository root." >&2
+      exit 1
+    fi
+
+    BUNDLE_GEMFILE="Gemfile" bundle install
+    BUNDLE_GEMFILE="Gemfile" bundle update cocoapods
+
+    CP_VERSION=$(RUBYOPT="-rlogger ${RUBYOPT:-}" BUNDLE_GEMFILE="Gemfile" bundle exec pod --version)
+    if [ "$CP_VERSION" != "$TARGET_VERSION" ]; then
+      echo "Error: Bundler resolved CocoaPods $CP_VERSION, expected $TARGET_VERSION." >&2
+      exit 1
+    fi
+
+    if [ -d ios ]; then
+      pushd ios >/dev/null
+      RUBYOPT="-rlogger ${RUBYOPT:-}" BUNDLE_GEMFILE="../Gemfile" bundle exec pod install
+      popd >/dev/null
+    else
+      echo "Warning: ios directory not found; skipping pod install." >&2
+    fi
+
+    echo "CocoaPods updated to $TARGET_VERSION"
+
 # Remove CocoaPods caches and reinstall Pods
 clean-pods:
     #!/usr/bin/env bash
