@@ -36,7 +36,14 @@ build-ios env="staging":
     APPLICATION_NAME=$(read_json applicationName); APPLICATION_NAME=${APPLICATION_NAME:-$DEFAULT_APPLICATION_NAME}
     DEVELOPER_NAME=$(read_json developerName);   DEVELOPER_NAME=${DEVELOPER_NAME:-$DEFAULT_DEVELOPER_NAME}
     RELEASE_BUILDDIR=$(read_json releaseBuildDir); RELEASE_BUILDDIR=${RELEASE_BUILDDIR:-$DEFAULT_RELEASE_BUILDDIR}
-    COCOAPODS_VERSION=$(read_json cocoapodsVersion); COCOAPODS_VERSION=${COCOAPODS_VERSION:-$DEFAULT_COCOAPODS_VERSION}
+    COCOAPODS_VERSION=$(read_json cocoapodsVersion)
+    if [ -z "$COCOAPODS_VERSION" ]; then
+      COCOAPODS_VERSION=$DEFAULT_COCOAPODS_VERSION
+    fi
+    COCOAPODS_MIN_VERSION=$(read_json cocoapodsMinVersion)
+    if [ -z "$COCOAPODS_MIN_VERSION" ]; then
+      COCOAPODS_MIN_VERSION=$COCOAPODS_VERSION
+    fi
 
     ARCHIVE_PATH_JSON=$(read_json archivePath)
     EXPORT_OPTIONS_PLIST_JSON=$(read_json exportOptionsPlist)
@@ -223,13 +230,14 @@ build-ios env="staging":
     if command -v bundle >/dev/null 2>&1 && [ -f "../Gemfile" ]; then
       echo "Using Bundler for CocoaPods (Gemfile at repo root)"
       BUNDLE_GEMFILE="../Gemfile" bundle install --quiet
-      # Require CocoaPods >= 1.13.0 for visionOS DSL
+      # Require a CocoaPods version new enough for the configured feature set
       # Workaround Ruby 3.2 + activesupport Logger constant issue by forcing stdlib logger to load
       CP_VERSION=$(RUBYOPT="-rlogger ${RUBYOPT:-}" BUNDLE_GEMFILE="../Gemfile" bundle exec pod --version)
-      REQ_CP_VERSION="1.13.0"
+      REQ_CP_VERSION="$COCOAPODS_MIN_VERSION"
       if [ "$(printf '%s\n' "$CP_VERSION" "$REQ_CP_VERSION" | sort -V | head -n1)" != "$REQ_CP_VERSION" ]; then
         echo "Error: CocoaPods $CP_VERSION is too old. visionOS support requires >= $REQ_CP_VERSION." >&2
         echo "Update with: BUNDLE_GEMFILE=Gemfile bundle update cocoapods" >&2
+        echo "(Or lower cocoapodsMinVersion in ios.json if visionOS is not required.)" >&2
         exit 1
       fi
       # Install Pods with retry on checksum mismatches (e.g., boost)
@@ -242,10 +250,10 @@ build-ios env="staging":
     else
       if command -v pod >/dev/null 2>&1; then
         CP_VERSION=$(RUBYOPT="-rlogger ${RUBYOPT:-}" pod --version)
-        REQ_CP_VERSION="1.13.0"
+        REQ_CP_VERSION="$COCOAPODS_MIN_VERSION"
         if [ "$(printf '%s\n' "$CP_VERSION" "$REQ_CP_VERSION" | sort -V | head -n1)" != "$REQ_CP_VERSION" ]; then
           echo "Error: CocoaPods $CP_VERSION is too old. visionOS support requires >= $REQ_CP_VERSION." >&2
-          echo "Update with: gem install cocoapods -v '>= 1.13.0'" >&2
+          echo "Update with: gem install cocoapods -v '>= $REQ_CP_VERSION'" >&2
           exit 1
         fi
         # Install Pods with retry on checksum mismatches (e.g., boost)
