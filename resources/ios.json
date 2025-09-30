@@ -26,6 +26,7 @@
   "provisioningProfilesPath": "",
   "keychainPassword": "",
   "cocoapodsVersion": "1.13.0",
+  "cocoapodsMinVersion": "1.13.0",
   "podSourceOverrides": {
     "boost@1.76.0": {
       "url": "https://archives.boost.io/release/1.76.0/source/boost_1_76_0.tar.bz2",
