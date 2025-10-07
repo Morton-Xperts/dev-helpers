@@ -1,5 +1,10 @@
 #/!/usr/bin/env just
 
+# Run from a menu chooser (fzf)
+run:
+    @echo "Choose a platform to run:"
+    just --choose -f ./.xperts/dev-helpers/recipes/run.just -d .
+
 # Run the iOS app
 run-ios:
     @echo "Running iOS app..."
