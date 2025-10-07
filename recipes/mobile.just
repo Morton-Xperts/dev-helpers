@@ -75,4 +75,4 @@ configure-app env:
 
 test-app:
     @echo "Running React Native app tests..."
-    yarn test --watchAll=false
+    npx jest --runInBand

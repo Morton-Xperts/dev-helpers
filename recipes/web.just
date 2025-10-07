@@ -7,4 +7,4 @@ build-web:
 
 test-web:
     @echo "Running web app tests..."
-    (cd backend/web_app && CI=1 yarn test --watchAll=false)
+    (cd backend/web_app && CI=1 npx react-scripts test --watchAll=false)
