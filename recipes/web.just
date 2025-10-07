@@ -4,3 +4,7 @@
 build-web:
     @echo "Building web app..."
     @./scripts/exports.sh && ./node_modules/.bin/webpack --config ./webpack.config.js --color --mode production
+
+test-web:
+    @echo "Running web app tests..."
+    (cd backend/web_app && CI=1 yarn test --watchAll=false)

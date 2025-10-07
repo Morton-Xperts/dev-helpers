@@ -72,3 +72,7 @@ configure-app env:
     esac
     printf "// THIS FILE IS AUTO GENERATED. DO NOT MANUALLY MODIFY. SEE EXECUTABLE 'configure'\nconst env = '$FLAVOR';\nexport default env;\n" > env.js
     echo "Wrote env.js with environment: $FLAVOR"
+
+test-app:
+    @echo "Running React Native app tests..."
+    yarn test --watchAll=false

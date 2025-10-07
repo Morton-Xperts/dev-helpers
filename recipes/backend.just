@@ -377,3 +377,9 @@ set-db-timezone timezone:
     @just query "ALTER SYSTEM SET timezone TO '{{timezone}}'; SELECT pg_reload_conf();"
     @just query "SHOW TIME ZONE;"
     @just query "SELECT EXTRACT(TIMEZONE FROM now());"
+
+[working-directory: 'backend']
+test-backend target="dispatch.tests":
+    #/usr/bin/env bash
+    @echo 'Running backend tests...'
+    $DOCKER_COMPOSE exec web python3 manage.py test {{target}}

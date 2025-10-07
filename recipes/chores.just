@@ -8,7 +8,3 @@ prettify path=".":
 lint path=".":
     @echo "Linting..."
     eslint "{{path}}" --fix
-
-test:
-    @echo "Running tests..."
-    jest
