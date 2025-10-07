@@ -14,3 +14,10 @@ extract-cb-dockerfile version:
 
 dive-cb-dockerfile version:
     dive crowdbotics/cb-django:{{version}}-slim-buster
+
+# Cleans up orphaned images and volumes
+clean-docker:
+    @echo "Cleaning up orphaned Docker images and volumes..."
+    docker image prune -a -f
+    docker volume prune -f
+    @echo "Cleanup complete."
