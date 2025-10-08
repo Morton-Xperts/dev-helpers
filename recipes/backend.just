@@ -331,7 +331,7 @@ create-superuser username email:
 # Regenerate Pipfile.lock inside a Python container
 [working-directory: 'backend']
 lock-backend python-version="":
-    #/usr/bin/env bash
+    #!/usr/bin/env bash
     set -euo pipefail
 
     PY_VERSION="{{python-version}}"
@@ -348,11 +348,18 @@ lock-backend python-version="":
     fi
 
     echo "Locking backend dependencies with Python $PY_VERSION in Docker..."
+    TMP_VENV_DIR=$(mktemp -d 2>/dev/null || mktemp -d -t pipenv-lock)
+    cleanup() {
+      rm -rf "$TMP_VENV_DIR"
+    }
+    trap cleanup EXIT
+
     docker run --rm \
       -v "$PWD":/app \
+      -v "$TMP_VENV_DIR":/app/.venv \
       -w /app \
       python:"$PY_VERSION" \
-      bash -lc "python --version && pip install -q pipenv && pipenv lock --clear"
+      bash -lc "python --version && pip install -q pipenv && PIPENV_VENV_IN_PROJECT=1 pipenv lock --clear"
     echo "Generated Pipfile.lock for Python $PY_VERSION."
 
 # Collect static files into the STATIC_ROOT directory
