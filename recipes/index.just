@@ -3,6 +3,7 @@ set export
 set quiet
 
 import "android.just"
+import "azure.just"
 import "backend.just"
 import "chores.just"
 import "docker.just"
