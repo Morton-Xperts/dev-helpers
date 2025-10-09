@@ -1,5 +1,14 @@
 #/!/usr/bin/env just
 
+login-azure:
+    #!/usr/bin/env bash
+    echo "Logging in to Azure..."
+    az login \
+      --service-principal \
+      --username "$AZURE_CLIENT_ID" \
+      --password "$AZURE_CLIENT_SECRET" \
+      --tenant "$AZURE_TENANT_ID"
+
 deactivate-container-app revision container-app="" resource-group="":
     #!/usr/bin/env bash
     echo "Deactivating: container app revision..."
