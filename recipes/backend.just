@@ -386,7 +386,13 @@ set-db-timezone timezone:
     @just query "SELECT EXTRACT(TIMEZONE FROM now());"
 
 [working-directory: 'backend']
-test-backend target="dispatch.tests":
-    #/usr/bin/env bash
-    @echo 'Running backend tests...'
-    $DOCKER_COMPOSE exec web python3 manage.py test {{target}}
+test-backend target="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo 'Running backend tests...'
+    $DOCKER_COMPOSE exec web python3 manage.py collectstatic --noinput
+    if [ -n "{{target}}" ]; then
+      $DOCKER_COMPOSE exec web python3 manage.py test {{target}}
+    else
+      $DOCKER_COMPOSE exec web python3 manage.py test
+    fi
