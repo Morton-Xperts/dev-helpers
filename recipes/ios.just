@@ -5,6 +5,24 @@ build-ios env="staging":
     #!/usr/bin/env bash
     set -euo pipefail
 
+    cleanup_keychain() {
+      local exit_code=$1
+      set +e
+      if command -v just >/dev/null 2>&1; then
+        just fix-macos-keychain >/dev/null 2>&1 || true
+      else
+        security default-keychain -d user -s login.keychain-db >/dev/null 2>&1 || true
+        security list-keychains -d user -s \
+          "$HOME/Library/Keychains/login.keychain-db" \
+          "/Library/Keychains/System.keychain" >/dev/null 2>&1 || true
+        security unlock-keychain "$HOME/Library/Keychains/login.keychain-db" >/dev/null 2>&1 || true
+        TMP_KC=$(getconf DARWIN_USER_TEMP_DIR 2>/dev/null)app-signing.keychain-db
+        [ -f "$TMP_KC" ] && security delete-keychain "$TMP_KC" >/dev/null 2>&1 || true
+      fi
+      exit "$exit_code"
+    }
+    trap 'cleanup_keychain $?' EXIT
+
     if ! command -v jq >/dev/null 2>&1; then
       echo "Error: jq is required to parse ios.json. Please install jq." >&2
       exit 1
