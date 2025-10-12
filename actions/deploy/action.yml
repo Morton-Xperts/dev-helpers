@@ -55,6 +55,11 @@ runs:
         username: ${{ inputs.acr-username }}
         password: ${{ inputs.acr-password }}
 
+    - name: 'Copy Environment-Specific .env File'
+      shell: bash
+      run: |
+        cp backend/.env.${{ inputs.environment }} backend/.env
+
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
       with:
