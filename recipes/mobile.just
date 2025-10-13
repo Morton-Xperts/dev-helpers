@@ -76,3 +76,70 @@ configure-app env:
 test-app:
     @echo "Running React Native app tests..."
     npx jest --runInBand
+
+# Compare mobile config JSON files with their schema counterparts
+compare-config-schemas:
+    #!/usr/bin/env python3
+    import json
+    from pathlib import Path
+
+    pairs = {
+        "ios": (Path("ios.json"), Path(".xperts/dev-helpers/resources/ios.json")),
+        "android": (Path("android.json"), Path(".xperts/dev-helpers/resources/android.json")),
+    }
+
+    def load(path: Path):
+        try:
+            with path.open() as handle:
+                return json.load(handle)
+        except FileNotFoundError:
+            print(f"[error] Missing file: {path}")
+            return {}
+
+
+    def collect_keys(data, prefix=""):
+        keys = set()
+        if isinstance(data, dict):
+            for key, value in data.items():
+                new_prefix = f"{prefix}.{key}" if prefix else key
+                keys.add(new_prefix)
+                keys |= collect_keys(value, new_prefix)
+        elif isinstance(data, list):
+            list_prefix = f"{prefix}[]" if prefix else "[]"
+            keys.add(list_prefix)
+            for item in data:
+                keys |= collect_keys(item, list_prefix)
+        return keys
+
+
+    for label, (project_path, schema_path) in pairs.items():
+        project = load(project_path)
+        schema = load(schema_path)
+        project_keys = collect_keys(project)
+        schema_keys = collect_keys(schema)
+
+        missing = sorted(schema_keys - project_keys)
+        extra = sorted(project_keys - schema_keys)
+
+        project_spec = project.get("specVersion", "<missing>")
+        schema_spec = schema.get("specVersion", "<missing>")
+
+        print(f"[ {label.upper()} ]")
+        print(f"  project specVersion: {project_spec}")
+        print(f"  schema  specVersion: {schema_spec}")
+
+        if missing:
+            print("  missing keys vs schema:")
+            for key in missing:
+                print(f"    - {key}")
+        else:
+            print("  missing keys vs schema: none")
+
+        if extra:
+            print("  extra keys (only in project):")
+            for key in extra:
+                print(f"    - {key}")
+        else:
+            print("  extra keys (only in project): none")
+
+        print()
