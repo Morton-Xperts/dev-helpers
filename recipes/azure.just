@@ -145,3 +145,129 @@ exec-container-app revision command container-app="" resource-group="":
       --name "$container_app" \
       --resource-group "$resource_group" \
       --command "{{command}}"
+
+create-azure-ci-service-principal app-name resource-groups:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    app_name="{{app-name}}"
+    resource_groups_input="{{resource-groups}}"
+
+    if [ -z "$app_name" ]; then
+      echo "app-name argument is required" >&2
+      exit 1
+    fi
+
+    if [ -z "$resource_groups_input" ]; then
+      echo "resource-groups argument is required (comma-delimited)" >&2
+      exit 1
+    fi
+
+    echo "Resolving app registration '$app_name'..."
+    app_id="$(az ad app list --display-name "$app_name" --query "[0].appId" -o tsv)"
+
+    if [ -z "$app_id" ]; then
+      echo "Creating app registration '$app_name'..."
+      app_id="$(az ad app create --display-name "$app_name" --query appId -o tsv)"
+    else
+      echo "App registration '$app_name' already exists (appId: $app_id)."
+    fi
+
+    if az ad sp show --id "$app_id" >/dev/null 2>&1; then
+      echo "Service principal already exists for appId $app_id."
+    else
+      echo "Creating service principal for appId $app_id..."
+      az ad sp create --id "$app_id" >/dev/null
+    fi
+
+    secret_name="ci-sp-$(date +%s)"
+    echo "Creating client secret '$secret_name'..."
+    password="$(az ad app credential reset --id "$app_id" --display-name "$secret_name" --query password -o tsv)"
+
+    if [ -z "$password" ]; then
+      echo "Failed to create a client secret for appId $app_id" >&2
+      exit 1
+    fi
+
+    subscription_id="$(az account show --query id -o tsv)"
+    tenant_id="$(az account show --query tenantId -o tsv)"
+    display_name="$(az ad sp show --id "$app_id" --query displayName -o tsv)"
+
+    IFS=',' read -r -a rg_array <<< "$resource_groups_input"
+
+    for rg in "${rg_array[@]}"; do
+      trimmed="$(echo "$rg" | xargs)"
+      if [ -z "$trimmed" ]; then
+        continue
+      fi
+
+      scope="/subscriptions/$subscription_id/resourceGroups/$trimmed"
+      echo "Ensuring Owner role on resource group '$trimmed' (scope: $scope)..."
+
+      existing_json="$(az role assignment list \
+        --assignee "$app_id" \
+        --scope "$scope" \
+        --query "[?roleDefinitionName=='Owner']" \
+        -o json)"
+
+      existing_compact="$(printf '%s' "$existing_json" | tr -d '[:space:]')"
+
+      if [ -z "$existing_compact" ] || [ "$existing_compact" = "[]" ]; then
+        az role assignment create \
+          --assignee "$app_id" \
+          --role Owner \
+          --scope "$scope" \
+          >/dev/null
+        echo "Assigned Owner role on '$trimmed'."
+      else
+        echo "Owner role already assigned on '$trimmed'; skipping."
+      fi
+    done
+
+    printf '{\n'
+    printf '  "appId": "%s",\n' "$app_id"
+    printf '  "displayName": "%s",\n' "$display_name"
+    printf '  "password": "%s",\n' "$password"
+    printf '  "tenant": "%s"\n' "$tenant_id"
+    printf '}\n'
+
+test-azure-ci-service-principal app-id client-secret tenant:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    app_id="{{app-id}}"
+    client_secret="{{client-secret}}"
+    tenant="{{tenant}}"
+
+    if [ -z "$app_id" ]; then
+      echo "app-id argument is required" >&2
+      exit 1
+    fi
+
+    if [ -z "$client_secret" ]; then
+      echo "client-secret argument is required" >&2
+      exit 1
+    fi
+
+    if [ -z "$tenant" ]; then
+      echo "tenant argument is required" >&2
+      exit 1
+    fi
+
+    logout() {
+      az logout --username "$app_id" >/dev/null 2>&1 || true
+    }
+    trap logout EXIT
+
+    echo "Attempting service principal login..."
+    az login \
+      --service-principal \
+      --username "$app_id" \
+      --password "$client_secret" \
+      --tenant "$tenant" \
+      >/dev/null
+
+    echo "Login succeeded. Active context:"
+    az account show \
+      --query '{subscriptionId:id, name:name, tenantId:tenantId, user:user.name}' \
+      -o json
