@@ -44,11 +44,6 @@ inputs:
     description: 'The resource group of the Azure Web App'
     required: true
 
-  startup-script-path:
-    description: 'Optional path to a startup script to run inside the web app container after restart'
-    required: false
-    default: ''
-
 runs:
   using: "composite"
 
@@ -96,22 +91,3 @@ runs:
         az webapp restart \
           --name ${{ inputs.azure-app-name }} \
           --resource-group ${{ inputs.azure-resource-group-name }}
-
-    - name: Run Startup Script
-      if: ${{ inputs.startup-script-path != '' }}
-      shell: bash
-      env:
-        STARTUP_SCRIPT_PATH: ${{ inputs.startup-script-path }}
-      run: |
-        echo "Opening SSH session to run ${STARTUP_SCRIPT_PATH}..."
-        {
-          az webapp ssh \
-            --name ${{ inputs.azure-app-name }} \
-            --resource-group ${{ inputs.azure-resource-group-name }} <<'EOF'
-        bash "$STARTUP_SCRIPT_PATH"
-        exit
-        EOF
-        } || {
-          echo "Startup script failed" >&2
-          exit 1
-        }
