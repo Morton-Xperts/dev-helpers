@@ -59,6 +59,12 @@ migrate app="":
     @echo "Running migrations..."
     $DOCKER_COMPOSE exec web python3 manage.py migrate {{app}}
 
+# Show migrations
+[working-directory: 'backend']
+show-migrations app="":
+    @echo "Showing migrations..."
+    $DOCKER_COMPOSE exec web python3 manage.py showmigrations {{app}}
+
 # Migrate the database schema to the latest version
 [working-directory: 'backend']
 make-migrations app="":
