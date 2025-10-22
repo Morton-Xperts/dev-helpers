@@ -59,11 +59,18 @@ migrate app="":
     @echo "Running migrations..."
     $DOCKER_COMPOSE exec web python3 manage.py migrate {{app}}
 
-# Show migrations
+# Show migrations status
 [working-directory: 'backend']
 show-migrations app="":
     @echo "Showing migrations..."
     $DOCKER_COMPOSE exec web python3 manage.py showmigrations {{app}}
+
+# Resync migrations by faking a zero state and reapplying migrations
+[working-directory: 'backend']
+resync-migrations app="" rev="zero":
+    @echo "Resyncing migrations..."
+    $DOCKER_COMPOSE exec web python3 manage.py migrate --fake {{app}} {{rev}}
+    @just -f ../justfile migrate "{{app}}"
 
 # Migrate the database schema to the latest version
 [working-directory: 'backend']
