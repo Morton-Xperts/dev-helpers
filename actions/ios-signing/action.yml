@@ -1,0 +1,76 @@
+name: 'iOS Install Signing Assets'
+description: Install signing certificates and provisioning profiles defined in ios.json.
+
+inputs:
+  ios-config-path:
+    description: 'Path to ios.json (defaults to repo-root ios.json)'
+    required: false
+    default: 'ios.json'
+  certificate-base64:
+    description: 'Base64-encoded .p12 certificate (overrides ios.json)'
+    required: false
+    default: ''
+  certificate-path:
+    description: 'Filesystem path to the .p12 certificate (overrides ios.json)'
+    required: false
+    default: ''
+  provisioning-profiles-base64:
+    description: 'Base64-encoded archive (tar/zip) of provisioning profiles'
+    required: false
+    default: ''
+  provisioning-profiles-path:
+    description: 'Filesystem path to provisioning profiles archive'
+    required: false
+    default: ''
+  p12-password:
+    description: 'Password for the .p12 certificate'
+    required: false
+    default: ''
+  keychain-password:
+    description: 'Password for the temporary signing keychain'
+    required: false
+    default: ''
+  keychain-name:
+    description: 'Name for the temporary signing keychain'
+    required: false
+    default: 'app-signing'
+  keychain-path:
+    description: 'Override the signing keychain path'
+    required: false
+    default: ''
+  provisioning-destination:
+    description: 'Directory to install provisioning profiles'
+    required: false
+    default: '${HOME}/Library/MobileDevice/Provisioning Profiles'
+
+outputs:
+  keychain-path:
+    description: 'Path of the created signing keychain'
+    value: ${{ steps.install.outputs.keychain_path }}
+  keychain-name:
+    description: 'Name of the signing keychain'
+    value: ${{ steps.install.outputs.keychain_name }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: 'Set up Just'
+      uses: extractions/setup-just@v3
+
+    - name: Install signing assets
+      id: install
+      shell: bash
+      env:
+        IOS_SIGNING_CONFIG_PATH: ${{ inputs.ios-config-path }}
+        IOS_SIGNING_CERT_BASE64: ${{ inputs.certificate-base64 }}
+        IOS_SIGNING_CERT_PATH: ${{ inputs.certificate-path }}
+        IOS_SIGNING_PROFILES_BASE64: ${{ inputs.provisioning-profiles-base64 }}
+        IOS_SIGNING_PROFILES_PATH: ${{ inputs.provisioning-profiles-path }}
+        IOS_SIGNING_P12_PASSWORD: ${{ inputs.p12-password }}
+        IOS_SIGNING_KEYCHAIN_PASSWORD: ${{ inputs.keychain-password }}
+        IOS_SIGNING_KEYCHAIN_NAME: ${{ inputs.keychain-name }}
+        IOS_SIGNING_KEYCHAIN_PATH: ${{ inputs.keychain-path }}
+        IOS_SIGNING_PROVISIONING_DESTINATION: ${{ inputs.provisioning-destination }}
+      run: |
+        set -euo pipefail
+        just install-signing

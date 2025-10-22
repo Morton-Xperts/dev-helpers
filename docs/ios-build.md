@@ -86,6 +86,8 @@ The recipe will:
 - Archive and export the app to the configured `exportPath`.
 
 ## GitHub Actions Integration
+- `recipes/install-signing`: run `just install-signing` locally to create the signing keychain and install provisioning profiles using `ios.json`. Supply overrides via environment variables (e.g., `IOS_SIGNING_CERT_BASE64`) or by passing recipe arguments.
+- `actions/ios-signing` installs the signing certificate and provisioning profiles defined in `ios.json`. It can also accept overrides through action inputs, making it easy to feed GitHub Secrets at runtime.
 - `actions/ios-build` reads Node.js version, environment, artifact names, and output locations from `ios.json` and uploads them automatically. The action delegates building and signing to the `ios-build` recipe. Keep `ios/ExportOptions.plist` in place.
 - `actions/ios-upload` resolves the artifact path from `ios.json` and auto-detects the IPA filename when possible (or falls back to `applicationName.ipa`). Supply either `appStoreConnect.username/password` or API key credentials under `appStoreConnect`.
   - It also reads `artifact-name` and App Store Connect credentials from `ios.json` if not provided as inputs.

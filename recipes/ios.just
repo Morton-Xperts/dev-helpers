@@ -1,9 +1,225 @@
 #/!/usr/bin/env just
 
+install-signing ios_config_path="ios.json" certificate_base64="" certificate_path="" provisioning_profiles_base64="" provisioning_profiles_path="" p12_password="" keychain_password="" keychain_name="app-signing" keychain_path="" provisioning_destination="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    IOS_CONFIG_PATH="{{ios_config_path}}"
+    CERT_BASE64="{{certificate_base64}}"
+    CERT_PATH="{{certificate_path}}"
+    PROFILES_BASE64="{{provisioning_profiles_base64}}"
+    PROFILES_PATH="{{provisioning_profiles_path}}"
+    P12_PASSWORD="{{p12_password}}"
+    KEYCHAIN_PASSWORD="{{keychain_password}}"
+    KEYCHAIN_NAME="{{keychain_name}}"
+    KEYCHAIN_PATH_INPUT="{{keychain_path}}"
+    PROVISIONING_DESTINATION="{{provisioning_destination}}"
+
+    # Allow environment overrides for automation contexts (e.g., GitHub Actions)
+    [ -n "${IOS_SIGNING_CONFIG_PATH:-}" ] && IOS_CONFIG_PATH="${IOS_SIGNING_CONFIG_PATH}"
+    [ -n "${IOS_SIGNING_CERT_BASE64:-}" ] && CERT_BASE64="${IOS_SIGNING_CERT_BASE64}"
+    [ -n "${IOS_SIGNING_CERT_PATH:-}" ] && CERT_PATH="${IOS_SIGNING_CERT_PATH}"
+    [ -n "${IOS_SIGNING_PROFILES_BASE64:-}" ] && PROFILES_BASE64="${IOS_SIGNING_PROFILES_BASE64}"
+    [ -n "${IOS_SIGNING_PROFILES_PATH:-}" ] && PROFILES_PATH="${IOS_SIGNING_PROFILES_PATH}"
+    [ -n "${IOS_SIGNING_P12_PASSWORD:-}" ] && P12_PASSWORD="${IOS_SIGNING_P12_PASSWORD}"
+    [ -n "${IOS_SIGNING_KEYCHAIN_PASSWORD:-}" ] && KEYCHAIN_PASSWORD="${IOS_SIGNING_KEYCHAIN_PASSWORD}"
+    [ -n "${IOS_SIGNING_KEYCHAIN_NAME:-}" ] && KEYCHAIN_NAME="${IOS_SIGNING_KEYCHAIN_NAME}"
+    [ -n "${IOS_SIGNING_KEYCHAIN_PATH:-}" ] && KEYCHAIN_PATH_INPUT="${IOS_SIGNING_KEYCHAIN_PATH}"
+    [ -n "${IOS_SIGNING_PROVISIONING_DESTINATION:-}" ] && PROVISIONING_DESTINATION="${IOS_SIGNING_PROVISIONING_DESTINATION}"
+
+    KEYCHAIN_NAME=${KEYCHAIN_NAME:-app-signing}
+    IOS_CONFIG_PATH=${IOS_CONFIG_PATH:-ios.json}
+
+    if [ -n "$IOS_CONFIG_PATH" ] && [ ! -f "$IOS_CONFIG_PATH" ] && [ -n "${GITHUB_WORKSPACE:-}" ]; then
+      if [ -f "$GITHUB_WORKSPACE/$IOS_CONFIG_PATH" ]; then
+        IOS_CONFIG_PATH="$GITHUB_WORKSPACE/$IOS_CONFIG_PATH"
+      fi
+    fi
+
+    if [ -n "$IOS_CONFIG_PATH" ] && [ "${IOS_CONFIG_PATH##*.}" != "json" ]; then
+      if [ -z "$KEYCHAIN_PATH_INPUT" ]; then
+        KEYCHAIN_PATH_INPUT="$IOS_CONFIG_PATH"
+      fi
+      IOS_CONFIG_PATH="ios.json"
+    fi
+
+    HAVE_CONFIG=false
+    if [ -f "$IOS_CONFIG_PATH" ]; then
+      HAVE_CONFIG=true
+      if ! command -v jq >/dev/null 2>&1; then
+        echo "Error: jq is required to parse $IOS_CONFIG_PATH" >&2
+        exit 1
+      fi
+    fi
+
+    read_config() {
+      local query="$1"
+      if $HAVE_CONFIG; then
+        jq -r "$query // empty" "$IOS_CONFIG_PATH"
+      else
+        printf ''
+      fi
+    }
+
+    if [ -z "$CERT_BASE64" ]; then
+      CERT_BASE64="$(read_config '.certificateBase64')"
+    fi
+    if [ -z "$CERT_PATH" ]; then
+      CERT_PATH="$(read_config '.certificatePath')"
+    fi
+    if [ -z "$PROFILES_BASE64" ]; then
+      PROFILES_BASE64="$(read_config '.provisioningProfilesBase64')"
+    fi
+    if [ -z "$PROFILES_PATH" ]; then
+      PROFILES_PATH="$(read_config '.provisioningProfilesPath')"
+    fi
+    if [ -z "$P12_PASSWORD" ]; then
+      P12_PASSWORD="$(read_config '.p12Password')"
+    fi
+    if [ -z "$KEYCHAIN_PASSWORD" ]; then
+      KEYCHAIN_PASSWORD="$(read_config '.keychainPassword')"
+    fi
+    if [ -z "$PROVISIONING_DESTINATION" ]; then
+      PROVISIONING_DESTINATION="${HOME}/Library/MobileDevice/Provisioning Profiles"
+    fi
+
+    if [ -z "$KEYCHAIN_PATH_INPUT" ]; then
+      KEYCHAIN_PATH_INPUT="${RUNNER_TEMP:-}"
+    fi
+    if [ -z "$KEYCHAIN_PATH_INPUT" ]; then
+      KEYCHAIN_PATH_INPUT="${TMPDIR:-}"
+    fi
+    if [ -z "$KEYCHAIN_PATH_INPUT" ]; then
+      KEYCHAIN_PATH_INPUT="$(getconf DARWIN_USER_TEMP_DIR 2>/dev/null || echo /tmp/)"
+    fi
+    case "$KEYCHAIN_PATH_INPUT" in
+      */.keychain-db) KEYCHAIN_PATH="$KEYCHAIN_PATH_INPUT" ;;
+      *) KEYCHAIN_PATH="${KEYCHAIN_PATH_INPUT%/}/${KEYCHAIN_NAME}.keychain-db" ;;
+    esac
+
+    LOGIN_KEYCHAIN="${HOME}/Library/Keychains/login.keychain-db"
+    USE_EXISTING_KEYCHAIN=false
+    if [ "$KEYCHAIN_PATH" = "$LOGIN_KEYCHAIN" ]; then
+      USE_EXISTING_KEYCHAIN=true
+    fi
+
+    cleanup() {
+      rm -f "${CERT_TMP:-}" "${PROFILES_TMP:-}"
+      rm -rf "${PROFILES_DIR:-}"
+    }
+    trap cleanup EXIT
+
+    if [ -z "$CERT_BASE64" ] && [ -n "$CERT_PATH" ] && [ -f "$CERT_PATH" ]; then
+      CERT_BASE64="$(base64 < "$CERT_PATH" | tr -d '\n')"
+    fi
+    if [ -z "$PROFILES_BASE64" ] && [ -n "$PROFILES_PATH" ] && [ -f "$PROFILES_PATH" ]; then
+      PROFILES_BASE64="$(base64 < "$PROFILES_PATH" | tr -d '\n')"
+    fi
+
+    missing=()
+    [ -z "$CERT_BASE64" ] && missing+=(certificateBase64/certificatePath)
+    [ -z "$P12_PASSWORD" ] && missing+=(p12Password)
+    [ -z "$PROFILES_BASE64" ] && missing+=(provisioningProfilesBase64/provisioningProfilesPath)
+    if ! $USE_EXISTING_KEYCHAIN; then
+      [ -z "$KEYCHAIN_PASSWORD" ] && missing+=(keychainPassword)
+    fi
+    if [ ${#missing[@]} -gt 0 ]; then
+      echo "Error: Missing signing values (${missing[*]}). Provide them in ios.json or via inputs." >&2
+      exit 1
+    fi
+
+    CERT_TMP=$(mktemp -t ios_cert.XXXXXX.p12)
+    printf '%s' "$CERT_BASE64" | base64 --decode > "$CERT_TMP"
+
+    PROFILES_TMP=$(mktemp -t ios_profiles.XXXXXX.tar)
+    printf '%s' "$PROFILES_BASE64" | base64 --decode > "$PROFILES_TMP"
+
+    PROFILES_DIR=$(mktemp -d -t ios_profiles.XXXXXX)
+    if tar tzf "$PROFILES_TMP" >/dev/null 2>&1; then
+      tar xzf "$PROFILES_TMP" -C "$PROFILES_DIR"
+    elif tar tf "$PROFILES_TMP" >/dev/null 2>&1; then
+      tar xf "$PROFILES_TMP" -C "$PROFILES_DIR"
+    else
+      PROFILE_NAME="profile.mobileprovision"
+      if [ -n "$PROFILES_PATH" ]; then
+        base="${PROFILES_PATH##*/}"
+        case "$base" in
+          *.mobileprovision) PROFILE_NAME="$base" ;;
+        esac
+      fi
+      mv "$PROFILES_TMP" "$PROFILES_DIR/$PROFILE_NAME"
+      PROFILES_TMP=""
+    fi
+
+    mkdir -p "$PROVISIONING_DESTINATION"
+
+    if $USE_EXISTING_KEYCHAIN; then
+      if [ ! -f "$KEYCHAIN_PATH" ]; then
+        echo "Error: login keychain not found at $KEYCHAIN_PATH" >&2
+        exit 1
+      fi
+      if [ -n "$KEYCHAIN_PASSWORD" ]; then
+        security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+      else
+        security unlock-keychain "$KEYCHAIN_PATH" || true
+      fi
+    else
+      if [ -f "$KEYCHAIN_PATH" ]; then
+        security delete-keychain "$KEYCHAIN_PATH" >/dev/null 2>&1 || true
+      fi
+      security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+      security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+      security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+    fi
+
+    security import "$CERT_TMP" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH" >/dev/null
+    if [ -n "$KEYCHAIN_PASSWORD" ]; then
+      security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" >/dev/null
+    else
+      echo "Warning: keychain password not provided; skipping partition list update. Codesign may prompt for access." >&2
+    fi
+
+    existing_raw="$(security list-keychains -d user | sed 's/^[[:space:]]*"//;s/"$//')"
+    filtered=()
+    while IFS= read -r keychain; do
+      [ -n "$keychain" ] || continue
+      if [ "$keychain" != "$KEYCHAIN_PATH" ]; then
+        filtered+=("$keychain")
+      fi
+    done <<EOF
+    $existing_raw
+    EOF
+
+    if $USE_EXISTING_KEYCHAIN; then
+      security default-keychain -s "$KEYCHAIN_PATH" >/dev/null 2>&1 || true
+    else
+      security list-keychains -d user -s "$KEYCHAIN_PATH" "${filtered[@]}"
+      security default-keychain -s "$KEYCHAIN_PATH"
+    fi
+
+    for provision in "$PROFILES_DIR"/*.mobileprovision; do
+      [ -f "$provision" ] || continue
+      uuid=$(/usr/libexec/PlistBuddy -c 'Print :UUID' /dev/stdin <<< "$(security cms -D -i "$provision")")
+      cp "$provision" "$PROVISIONING_DESTINATION/$uuid.mobileprovision"
+    done
+
+    security find-identity -v -p codesigning || true
+
+    if [ -n "${GITHUB_OUTPUT:-}" ]; then
+      {
+        echo "keychain_path=$KEYCHAIN_PATH"
+        echo "keychain_name=$KEYCHAIN_NAME"
+      } >> "$GITHUB_OUTPUT"
+    fi
+
+    echo "Signing assets installed. Keychain: $KEYCHAIN_PATH"
+
 # Build iOS app (mirrors actions/ios-build without artifact uploads)
 build-ios env="staging":
     #!/usr/bin/env bash
     set -euo pipefail
+
+    SIGNING_KEYCHAIN_PATH=""
 
     cleanup_keychain() {
       local exit_code=$1
@@ -16,9 +232,33 @@ build-ios env="staging":
           "$HOME/Library/Keychains/login.keychain-db" \
           "/Library/Keychains/System.keychain" >/dev/null 2>&1 || true
         security unlock-keychain "$HOME/Library/Keychains/login.keychain-db" >/dev/null 2>&1 || true
-        TMP_KC=$(getconf DARWIN_USER_TEMP_DIR 2>/dev/null)app-signing.keychain-db
-        [ -f "$TMP_KC" ] && security delete-keychain "$TMP_KC" >/dev/null 2>&1 || true
       fi
+      local KEYCHAIN_TARGETS=()
+      if [ -n "$SIGNING_KEYCHAIN_PATH" ]; then
+        KEYCHAIN_TARGETS+=("$SIGNING_KEYCHAIN_PATH")
+      fi
+      local TMP_DIR
+      TMP_DIR=$(getconf DARWIN_USER_TEMP_DIR 2>/dev/null || printf '')
+      if [ -n "$TMP_DIR" ]; then
+        KEYCHAIN_TARGETS+=("${TMP_DIR%/}/app-signing.keychain-db")
+      fi
+      [ -n "${RUNNER_TEMP:-}" ] && KEYCHAIN_TARGETS+=("${RUNNER_TEMP%/}/app-signing.keychain-db")
+      # Deduplicate targets
+      local unique_targets=()
+      for kc in "${KEYCHAIN_TARGETS[@]}"; do
+        [ -n "$kc" ] || continue
+        local skip=false
+        for existing in "${unique_targets[@]}"; do
+          if [ "$existing" = "$kc" ]; then
+            skip=true
+            break
+          fi
+        done
+        $skip || unique_targets+=("$kc")
+      done
+      for kc in "${unique_targets[@]}"; do
+        [ -f "$kc" ] && security delete-keychain "$kc" >/dev/null 2>&1 || true
+      done
       exit "$exit_code"
     }
     trap 'cleanup_keychain $?' EXIT
@@ -95,79 +335,17 @@ build-ios env="staging":
     # Configure app environment centrally
     just configure-app "{{env}}"
 
-    # Resolve signing secrets
-    CERT_BASE64=$(read_json certificateBase64)
-    CERT_PATH=$(read_json certificatePath)
-    P12_PASS=$(read_json p12Password)
-    PROFILES_BASE64=$(read_json provisioningProfilesBase64)
-    PROFILES_PATH=$(read_json provisioningProfilesPath)
-    KEYCHAIN_PASS=$(read_json keychainPassword)
-    # Optional pod source override map from ios.json
-    # Format: { "podSourceOverrides": { "boost@1.76.0": { "url": "...", "checkSum": "..." } } }
-
-    # Allow file path fallback when base64 not provided
-    if [ -z "$CERT_BASE64" ] && [ -n "$CERT_PATH" ] && [ -f "$CERT_PATH" ]; then
-      CERT_BASE64=$(base64 < "$CERT_PATH" | tr -d '\n')
+    # Install signing assets via shared recipe
+    KEYCHAIN_TEMP_DIR=$(getconf DARWIN_USER_TEMP_DIR 2>/dev/null || printf '')
+    if [ -z "$KEYCHAIN_TEMP_DIR" ]; then
+      KEYCHAIN_TEMP_DIR="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
     fi
-    if [ -z "$PROFILES_BASE64" ] && [ -n "$PROFILES_PATH" ] && [ -f "$PROFILES_PATH" ]; then
-      PROFILES_BASE64=$(base64 < "$PROFILES_PATH" | tr -d '\n')
-    fi
-
-    missing=()
-    [ -z "$CERT_BASE64" ] && missing+=(certificateBase64/certificatePath)
-    [ -z "$P12_PASS" ] && missing+=(p12Password)
-    [ -z "$PROFILES_BASE64" ] && missing+=(provisioningProfilesBase64/provisioningProfilesPath)
-    [ -z "$KEYCHAIN_PASS" ] && missing+=(keychainPassword)
-    if [ ${#missing[@]} -gt 0 ]; then
-      echo "Error: Missing signing values: ${missing[*]} (provide in ios.json)." >&2
-      exit 1
-    fi
-
-    # Install certificate and provisioning profiles
-    CERTIFICATE_PATH=$(mktemp -t build_certificate.XXXXXX.p12)
-    PP_PAYLOAD=$(mktemp -t mobile_pp.XXXXXX)
-    PP_EXTRACT_DIR=$(mktemp -d -t mobile_profiles.XXXXXX)
-    KEYCHAIN_PATH=$TMPDIR/app-signing.keychain-db
-
-    echo -n "$CERT_BASE64" | base64 --decode -o "$CERTIFICATE_PATH"
-    echo -n "$PROFILES_BASE64" | base64 --decode -o "$PP_PAYLOAD"
-
-    if tar tzf "$PP_PAYLOAD" >/dev/null 2>&1; then
-      tar xzf "$PP_PAYLOAD" -C "$PP_EXTRACT_DIR"
-    elif tar tf "$PP_PAYLOAD" >/dev/null 2>&1; then
-      tar xf "$PP_PAYLOAD" -C "$PP_EXTRACT_DIR"
-    else
-      PROFILE_BASENAME="${PROFILES_PATH##*/}"
-      if [ -z "$PROFILE_BASENAME" ] || [ "$PROFILE_BASENAME" = "$PROFILES_PATH" ]; then
-        PROFILE_BASENAME="profile.mobileprovision"
-      fi
-      case "$PROFILE_BASENAME" in
-        *.mobileprovision) ;;
-        *) PROFILE_BASENAME="${PROFILE_BASENAME%.*}.mobileprovision" ;;
-      esac
-      mv "$PP_PAYLOAD" "$PP_EXTRACT_DIR/$PROFILE_BASENAME"
-    fi
-    rm -f "$PP_PAYLOAD"
-
-    # Create keychain if it doesn't already exist (idempotent)
-    if [ -e "$KEYCHAIN_PATH" ]; then
-      echo "Keychain already exists at $KEYCHAIN_PATH; skipping creation."
-    else
-      security create-keychain -p "$KEYCHAIN_PASS" "$KEYCHAIN_PATH"
-    fi
-    security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
-    security unlock-keychain -p "$KEYCHAIN_PASS" "$KEYCHAIN_PATH"
-    security import "$CERTIFICATE_PATH" -P "$P12_PASS" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
-    security list-keychain -d user -s "$KEYCHAIN_PATH"
-
-    mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-    for PROVISION in "$PP_EXTRACT_DIR"/*.mobileprovision; do
-      [ -f "$PROVISION" ] || continue
-      UUID=$(/usr/libexec/PlistBuddy -c 'Print :UUID' /dev/stdin <<< $(security cms -D -i "$PROVISION"))
-      cp "$PROVISION" ~/Library/MobileDevice/Provisioning\ Profiles/$UUID.mobileprovision
-    done
-    security find-identity -v -p codesigning
-    ls -l ~/Library/MobileDevice/Provisioning\ Profiles || true
+    KEYCHAIN_TEMP_DIR=${KEYCHAIN_TEMP_DIR%/}
+    SIGNING_KEYCHAIN_PATH="${KEYCHAIN_TEMP_DIR}/app-signing.keychain-db"
+    IOS_SIGNING_CONFIG_PATH="$IOS_JSON" \
+    IOS_SIGNING_KEYCHAIN_PATH="$SIGNING_KEYCHAIN_PATH" \
+    IOS_SIGNING_KEYCHAIN_NAME="app-signing" \
+    just install-signing
 
     # Enable Corepack and install deps
     corepack enable || true
