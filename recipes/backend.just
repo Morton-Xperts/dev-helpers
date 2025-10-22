@@ -78,6 +78,12 @@ make-migrations app="":
     @echo "Making migrations..."
     $DOCKER_COMPOSE exec web python3 manage.py makemigrations {{app}}
 
+# Merge divergent migrations
+[working-directory: 'backend']
+merge-migrations:
+    @echo "Merging migrations..."
+    $DOCKER_COMPOSE exec web python3 manage.py makemigrations --merge
+
 # Migrate the database schema to the latest version and rebuild the backend
 [working-directory: 'backend']
 migrate-and-rebuild app="":
