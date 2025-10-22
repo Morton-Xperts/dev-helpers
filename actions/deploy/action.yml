@@ -103,7 +103,15 @@ runs:
       env:
         STARTUP_SCRIPT_PATH: ${{ inputs.startup-script-path }}
       run: |
-        az webapp ssh \
-          --name ${{ inputs.azure-app-name }} \
-          --resource-group ${{ inputs.azure-resource-group-name }} \
-          --command "bash \"$STARTUP_SCRIPT_PATH\""
+        echo "Opening SSH session to run ${STARTUP_SCRIPT_PATH}..."
+        {
+          az webapp ssh \
+            --name ${{ inputs.azure-app-name }} \
+            --resource-group ${{ inputs.azure-resource-group-name }} <<'EOF'
+        bash "$STARTUP_SCRIPT_PATH"
+        exit
+        EOF
+        } || {
+          echo "Startup script failed" >&2
+          exit 1
+        }
