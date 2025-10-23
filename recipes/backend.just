@@ -390,14 +390,6 @@ collect-static:
     $DOCKER_COMPOSE exec web python3 manage.py collectstatic --noinput
     echo "Static files collected."
 
-# Generate progressive image variants for existing images
-[working-directory: 'backend']
-generate-image-variants:
-    #/usr/bin/env bash
-    set -euo pipefail
-    echo "Generating image variants..."
-    $DOCKER_COMPOSE exec web python3 manage.py generate_image_variants
-
 # Run a query against the database
 [working-directory: 'backend']
 query sql:
