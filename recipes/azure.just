@@ -231,6 +231,55 @@ create-azure-ci-service-principal app-name resource-groups:
     printf '  "tenant": "%s"\n' "$tenant_id"
     printf '}\n'
 
+assign-owner-to-resource-group object-id resource-group="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    assignee_object_id="{{object-id}}"
+    resource_group_input="{{resource-group}}"
+    subscription_id="${AZURE_SUBSCRIPTION_ID:-}"
+
+    if [ -z "$assignee_object_id" ]; then
+      echo "object-id argument is required" >&2
+      exit 1
+    fi
+
+    if [ -z "$resource_group_input" ]; then
+      if [ -n "${AZURE_RESOURCE_GROUP:-}" ]; then
+        resource_group_input="$AZURE_RESOURCE_GROUP"
+      else
+        echo "resource-group argument is required when AZURE_RESOURCE_GROUP is not set" >&2
+        exit 1
+      fi
+    fi
+
+    if [ -z "$subscription_id" ]; then
+      echo "AZURE_SUBSCRIPTION_ID environment variable is required" >&2
+      exit 1
+    fi
+
+    scope="/subscriptions/$subscription_id/resourceGroups/$resource_group_input"
+    echo "Ensuring Owner role for object '$assignee_object_id' on resource group '$resource_group_input'..."
+
+    existing_json="$(az role assignment list \
+      --assignee-object-id "$assignee_object_id" \
+      --scope "$scope" \
+      --query "[?roleDefinitionName=='Owner']" \
+      -o json)"
+
+    existing_compact="$(printf '%s' "$existing_json" | tr -d '[:space:]')"
+
+    if [ -z "$existing_compact" ] || [ "$existing_compact" = "[]" ]; then
+      az role assignment create \
+        --assignee-object-id "$assignee_object_id" \
+        --role Owner \
+        --scope "$scope" \
+        >/dev/null
+      echo "Assigned Owner role on resource group '$resource_group_input'."
+    else
+      echo "Owner role already assigned; nothing to do."
+    fi
+
 test-azure-ci-service-principal app-id client-secret tenant:
     #!/usr/bin/env bash
     set -euo pipefail
