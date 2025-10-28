@@ -27,6 +27,40 @@ ensure-android-sdks:
     sdk env install > /dev/null 2>&1 || echo "Failed to ensure Android SDKs."
     cd android && sdk env install > /dev/null 2>&1 || echo "Failed to ensure Android SDKs."
 
+# Increment Android versionCode in build.gradle
+increment-android-version-code:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    TARGET_FILE="android/app/build.gradle"
+    if [ ! -f "$TARGET_FILE" ]; then
+      echo "Error: $TARGET_FILE not found." >&2
+      exit 1
+    fi
+
+    python3 - <<'PY'
+    import pathlib
+    import re
+
+    path = pathlib.Path("android/app/build.gradle")
+    content = path.read_text()
+
+    pattern = re.compile(r"(versionCode\s+)(\d+)")
+
+    def replacer(match: re.Match) -> str:
+        current = int(match.group(2))
+        updated = current + 1
+        print(f"Incrementing Android versionCode: {current} -> {updated}")
+        return f"{match.group(1)}{updated}"
+
+    new_content, count = pattern.subn(replacer, content, count=1)
+
+    if count != 1:
+        raise SystemExit("Expected to update exactly one versionCode entry.")
+
+    path.write_text(new_content)
+    PY
+
 # Build Android app
 build-android env="staging":
     #!/usr/bin/env bash
@@ -90,6 +124,9 @@ build-android env="staging":
 
     # Configure app environment via recipe
     just configure-app "$ENV_NAME"
+
+    # Increment Android versionCode before building to ensure uniqueness
+    just increment-android-version-code
 
     # Run the build
     echo "This script will build the Android app."
