@@ -175,3 +175,50 @@ uninstall-android:
     PACKAGE_NAME=$(xmllint --xpath 'string(//manifest/@package)' android/app/src/main/AndroidManifest.xml)
     echo "Uninstalling package: $PACKAGE_NAME"
     adb uninstall $PACKAGE_NAME || echo "Failed to uninstall app; it may not be installed."
+
+# Generates an Android signing keystore and companion PEM export
+generate-android-keystore:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    if ! command -v keytool >/dev/null 2>&1; then
+        echo "Error: keytool not found on PATH." >&2
+        exit 1
+    fi
+
+    read -rp "Enter keystore name (without extension): " keystore_name
+    if [[ -z "${keystore_name// }" ]]; then
+        echo "Error: Keystore name is required." >&2
+        exit 1
+    fi
+    if [[ "$keystore_name" =~ [[:space:]] ]]; then
+        echo "Error: Keystore name must not contain whitespace." >&2
+        exit 1
+    fi
+
+    keystore_path="android/app/${keystore_name}.keystore"
+    cert_path="android/app/${keystore_name}_certificate.pem"
+
+    if [[ -e "$keystore_path" ]]; then
+        echo "Error: $keystore_path already exists; refusing to overwrite." >&2
+        exit 1
+    fi
+
+    if [[ -e "$cert_path" ]]; then
+        echo "Error: $cert_path already exists; refusing to overwrite." >&2
+        exit 1
+    fi
+
+    read -rp "Enter key alias [upload]: " alias_name
+    if [[ -z "$alias_name" ]]; then
+        alias_name="upload"
+    fi
+
+    echo "Generating keystore at $keystore_path..."
+    keytool -genkeypair -v -storetype JKS -keyalg RSA -keysize 2048 -validity 3650 -keystore "$keystore_path" -alias "$alias_name"
+
+    echo "Exporting certificate to $cert_path..."
+    keytool -export -rfc -keystore "$keystore_path" -alias "$alias_name" -file "$cert_path"
+
+    echo "Keystore created: $keystore_path"
+    echo "Certificate exported: $cert_path"
