@@ -61,8 +61,22 @@ increment-android-version-code:
     path.write_text(new_content)
     PY
 
-# Build Android app
+# Build Android app (checks for -for-repo override, delegates appropriately)
 build-android env="staging":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # Check if repo-specific override exists
+    if just --list 2>/dev/null | grep -q "build-android-for-repo"; then
+        echo "Using repo-specific Android build recipe..."
+        just build-android-for-repo "{{env}}"
+    else
+        echo "Using default Android build recipe..."
+        just build-android-internal "{{env}}"
+    fi
+
+# Build Android app
+build-android-internal env="staging":
     #!/usr/bin/env bash
     set -euo pipefail
 
