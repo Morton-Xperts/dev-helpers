@@ -128,8 +128,11 @@ build-android-internal env="staging":
     NVM_DIR="$HOME/.nvm"
     if [ -s "$NVM_DIR/nvm.sh" ]; then
       . "$NVM_DIR/nvm.sh"
-      nvm install "$NODE_VERSION"
-      nvm use "$NODE_VERSION"
+      if ! nvm use "$NODE_VERSION" >/dev/null 2>&1; then
+        nvm install "$NODE_VERSION"
+        nvm use "$NODE_VERSION"
+      fi
+      echo "Now using node $(node -v)"
     else
       echo "Note: nvm not found; continuing with system Node."
     fi
@@ -166,6 +169,7 @@ build-android-internal env="staging":
 
     echo "Setting up Android SDK root"
     export ANDROID_SDK_ROOT=~/Library/Android/sdk
+    export ANDROID_AAPT2_FROM_MAVEN_OVERRIDE="$ANDROID_SDK_ROOT/build-tools/35.0.0/aapt2"
 
 
     #############################################
@@ -174,7 +178,7 @@ build-android-internal env="staging":
     echo "Building the app..."
     cd android
     # Build Android App Bundle (AAB) for the default release variant
-    sh ./gradlew bundleRelease --stacktrace -x test
+    sh ./gradlew bundleRelease --stacktrace -x test -Pandroid.aapt2FromMavenOverride="$ANDROID_AAPT2_FROM_MAVEN_OVERRIDE"
 
 
     echo "Build complete. Outputs:"
