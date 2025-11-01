@@ -67,13 +67,32 @@ build-android env="staging":
     set -euo pipefail
 
     # Check if repo-specific override exists
-    if just --list 2>/dev/null | grep -q "build-android-for-repo"; then
+    if just --justfile {{justfile()}} --summary 2>/dev/null | tr ' ' '\n' | grep -q "^build-android-for-repo$"; then
         echo "Using repo-specific Android build recipe..."
         just build-android-for-repo "{{env}}"
     else
         echo "Using default Android build recipe..."
         just build-android-internal "{{env}}"
     fi
+
+# Run Android app (checks for -for-repo override, delegates appropriately)
+run-android:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # Check if repo-specific override exists
+    if just --list 2>/dev/null | grep -q "run-android-for-repo"; then
+        echo "Using repo-specific Android run recipe..."
+        just run-android-for-repo
+    else
+        echo "Using default Android run recipe..."
+        just run-android-internal
+    fi
+
+# Run the Android app
+run-android-internal:
+    @echo "Running Android app..."
+    NODE_OPTIONS="--openssl-legacy-provider" npx react-native run-android
 
 # Build Android app
 build-android-internal env="staging":

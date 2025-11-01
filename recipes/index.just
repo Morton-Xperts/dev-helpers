@@ -12,6 +12,11 @@ import "git.just"
 import "ios.just"
 import "main.just"
 import "mobile.just"
-import "run.just"
 import "setup.just"
 import "web.just"
+import "xcode.just"
+
+# Run from a menu chooser (fzf)
+run:
+    @echo "Choose a platform to run:"
+    just --choose -f ./.xperts/dev-helpers/recipes/run.just -d .

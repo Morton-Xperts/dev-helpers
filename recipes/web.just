@@ -8,3 +8,8 @@ build-web:
 test-web:
     @echo "Running web app tests..."
     (cd backend/web_app && CI=1 npx react-scripts test --watchAll=false)
+
+# Run the web app
+run-web:
+    @echo "Running web app..."
+    ./node_modules/.bin/webpack-dev-server --config ./webpack.config.js --live-reload --color --mode development

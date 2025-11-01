@@ -41,6 +41,16 @@ create-csr email cn out=".":
     echo "Private key:   $KEY_FILE"
     echo "Submit the CSR to your Certificate Authority. Keep the key secure."
 
+# Run the React Native app
+run-legacy-react-native:
+    @echo "Running React Native app..."
+    NODE_OPTIONS="--openssl-legacy-provider" npx react-native start
+
+# Run the React Native app
+run-react-native:
+    @echo "Running React Native app..."
+    NODE_OPTIONS="--openssl-legacy-provider" npx react-native start
+
 # Configure app environment (development, staging, production)
 configure-app env:
     #!/usr/bin/env bash

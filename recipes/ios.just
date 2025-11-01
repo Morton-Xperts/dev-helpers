@@ -214,14 +214,18 @@ install-signing ios_config_path="ios.json" certificate_base64="" certificate_pat
 
     echo "Signing assets installed. Keychain: $KEYCHAIN_PATH"
 
+# Run the iOS app
+run-ios-internal:
+    @echo "Running iOS app..."
+    NODE_OPTIONS="--openssl-legacy-provider" npx react-native run-ios
 
 # Build iOS app (checks for -for-repo override, delegates appropriately)
 build-ios env="staging":
     #!/usr/bin/env bash
     set -euo pipefail
 
-    # Check if repo-specific override exists
-    if just --list 2>/dev/null | grep -q "build-ios-for-repo"; then
+    # Check if repo-specific override exists by trying to call it
+    if just --justfile {{justfile()}} --summary 2>/dev/null | tr ' ' '\n' | grep -q "^build-ios-for-repo$"; then
         echo "Using repo-specific iOS build recipe..."
         just build-ios-for-repo "{{env}}"
     else
@@ -668,8 +672,6 @@ fix-macos-keychain:
     TMP_KC=$(getconf DARWIN_USER_TEMP_DIR 2>/dev/null)app-signing.keychain-db
     [ -f "$TMP_KC" ] && security delete-keychain "$TMP_KC" || true
 
-
-# FYI: DOCKER_COMPOSE varible is sourced from the .xperts backend.just recipe file
 
 # ============================================================================
 # Xcode Version Selection Recipes
