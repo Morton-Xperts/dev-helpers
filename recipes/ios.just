@@ -214,6 +214,22 @@ install-signing ios_config_path="ios.json" certificate_base64="" certificate_pat
 
     echo "Signing assets installed. Keychain: $KEYCHAIN_PATH"
 
+
+
+# Run iOS app (checks for -for-repo override, delegates appropriately)
+run-ios:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # Check if repo-specific override exists
+    if just --justfile {{justfile()}} --summary 2>/dev/null | tr ' ' '\n' | grep -q "^run-ios-for-repo$"; then
+        echo "Using repo-specific iOS run recipe..."
+        just run-ios-for-repo
+    else
+        echo "Using default iOS run recipe..."
+        just run-ios-internal
+    fi
+
 # Run the iOS app
 run-ios-internal:
     @echo "Running iOS app..."
