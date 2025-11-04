@@ -177,14 +177,7 @@ runs:
       if: ${{ inputs.type == 'regex' }}
       shell: bash
       run: |
-        VERSION="${{ inputs.version }}"
-        PATTERN="${{ inputs.regex-replace }}"
-        FLAGS="${{ inputs.regex-flags }}"
-        GROUP="${{ inputs.regex-group }}"
-        PREFIX="${{ inputs.regex-replace-prefix }}"
-        SUFFIX="${{ inputs.regex-replace-suffix }}"
-        FILES_JSON="/tmp/apply-version-files.json"
-
+        # Delegate directly to Python so the templated values aren't reinterpreted by the shell.
         python - << 'PY'
         import json, sys, re, pathlib
 
