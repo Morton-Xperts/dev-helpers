@@ -1,0 +1,224 @@
+name: 'Tag Conditionally'
+description: 'Create a prefixed tag when selected files changed in the current push.'
+
+inputs:
+  files-to-check:
+    description: 'Newline-delimited glob patterns (POSIX) relative to the repository root.'
+    required: true
+  github-token:
+    description: 'Optional token (reserved for future use).'
+    required: false
+    default: ''
+  version:
+    description: 'Version string used when composing the tag name.'
+    required: true
+  prefix:
+    description: 'Prefix prepended to the version when composing the tag name.'
+    required: false
+    default: ''
+
+outputs:
+  should-tag:
+    description: 'Whether any of the provided patterns matched changed files.'
+    value: ${{ steps.finalize.outputs.should-tag }}
+  tag-created:
+    description: 'Whether a tag was created during this run.'
+    value: ${{ steps.finalize.outputs.tag-created }}
+  tag-name:
+    description: 'The tag name derived from the prefix and version inputs.'
+    value: ${{ steps.finalize.outputs.tag-name }}
+  matched-files:
+    description: 'Subset of changed files matching the provided patterns (newline-separated).'
+    value: ${{ steps.finalize.outputs.matched-files }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: 'Ensure Git History'
+      shell: bash
+      env:
+        BEFORE: ${{ github.event.before }}
+      run: |
+        set -euo pipefail
+        if git rev-parse --is-shallow-repository >/dev/null 2>&1 && [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+          git fetch --no-tags --deepen=200 origin "${{ github.ref }}" || true
+        fi
+        if [[ -n "$BEFORE" && "$BEFORE" != "0000000000000000000000000000000000000000" ]]; then
+          git fetch --no-tags origin "$BEFORE" || true
+        fi
+
+    - name: 'Determine Relevant Changes'
+      id: changes
+      shell: python
+      env:
+        FILE_PATTERNS: ${{ inputs.files-to-check }}
+        VERSION: ${{ inputs.version }}
+        PREFIX: ${{ inputs.prefix }}
+        GITHUB_BEFORE: ${{ github.event.before }}
+        GITHUB_SHA: ${{ github.sha }}
+        GITHUB_EVENT_PATH: ${{ github.event_path }}
+      run: |
+        import json
+        import os
+        import pathlib
+        import subprocess
+        import sys
+        from pathlib import PurePosixPath
+
+        def encode(value: str) -> str:
+            value = value or ""
+            return value.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+        raw_patterns = [
+            line.strip()
+            for line in os.environ.get("FILE_PATTERNS", "").splitlines()
+            if line.strip()
+        ]
+
+        if not raw_patterns:
+            print("Error: at least one file pattern must be provided.", file=sys.stderr)
+            sys.exit(1)
+
+        patterns = []
+        seen_patterns = set()
+        for pattern in raw_patterns:
+            if pattern.startswith("./"):
+                pattern = pattern[2:]
+            if pattern and pattern not in seen_patterns:
+                seen_patterns.add(pattern)
+                patterns.append(pattern)
+
+        version = os.environ.get("VERSION", "").strip()
+        if not version:
+            print("Error: version input is required.", file=sys.stderr)
+            sys.exit(1)
+        prefix = os.environ.get("PREFIX", "")
+        tag_name = f"{prefix}{version}"
+
+        event_path = os.environ.get("GITHUB_EVENT_PATH")
+        changed_files = []
+
+        if event_path and pathlib.Path(event_path).is_file():
+            try:
+                with open(event_path, "r", encoding="utf-8") as handle:
+                    payload = json.load(handle)
+                commits = payload.get("commits") or []
+                for commit in commits:
+                    for key in ("added", "modified", "removed"):
+                        for path in commit.get(key) or []:
+                            if path:
+                                changed_files.append(path)
+                if not changed_files:
+                    head_commit = payload.get("head_commit") or {}
+                    for key in ("added", "modified", "removed"):
+                        for path in head_commit.get(key) or []:
+                            if path:
+                                changed_files.append(path)
+            except Exception as exc:  # pragma: no cover - defensive
+                print(f"Warning: failed to parse event payload: {exc}", file=sys.stderr)
+
+        changed_files = [path.replace("\\", "/") for path in changed_files]
+
+        if not changed_files:
+            before = os.environ.get("GITHUB_BEFORE", "").strip()
+            head = os.environ.get("GITHUB_SHA", "").strip()
+            candidates = []
+            if before and set(before) != {"0"}:
+                candidates.append(["git", "diff", "--name-only", before, head])
+            if head:
+                candidates.append(["git", "diff-tree", "--no-commit-id", "--name-only", "-r", head])
+
+            for cmd in candidates:
+                try:
+                    result = subprocess.run(
+                        cmd,
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                    )
+                    output = [
+                        line.strip().replace("\\", "/")
+                        for line in result.stdout.splitlines()
+                        if line.strip()
+                    ]
+                    if output:
+                        changed_files = output
+                        break
+                except subprocess.CalledProcessError as exc:  # pragma: no cover - defensive
+                    print(f"Warning: failed to compute changed files with {' '.join(cmd)}: {exc}", file=sys.stderr)
+
+        unique_files = []
+        seen = set()
+        for path in changed_files:
+            if path and path not in seen:
+                seen.add(path)
+                unique_files.append(path)
+        changed_files = unique_files
+
+        matching_files = []
+        for path in changed_files:
+            posix_path = PurePosixPath(path)
+            for pattern in patterns:
+                if posix_path.match(pattern):
+                    matching_files.append(path)
+                    break
+
+        should_tag = bool(matching_files)
+
+        print("Patterns to evaluate:")
+        for pattern in patterns:
+            print(f"  - {pattern}")
+        print("Files changed in push:")
+        if changed_files:
+            for path in changed_files:
+                print(f"  - {path}")
+        else:
+            print("  (none)")
+        print("Files matching provided patterns:")
+        if matching_files:
+            for path in matching_files:
+                print(f"  - {path}")
+        else:
+            print("  (none)")
+
+        with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as handle:
+            handle.write(f"should-tag={encode('true' if should_tag else 'false')}\n")
+            handle.write(f"tag-name={encode(tag_name)}\n")
+            handle.write(f"matched-files={encode('\\n'.join(matching_files))}\n")
+
+    - name: 'Create Tag'
+      id: create_tag
+      if: ${{ steps.changes.outputs.should-tag == 'true' }}
+      shell: bash
+      env:
+        TAG_NAME: ${{ steps.changes.outputs.tag-name }}
+      run: |
+        set -euo pipefail
+        if git rev-parse -q --verify "refs/tags/${TAG_NAME}" >/dev/null; then
+          echo "Tag ${TAG_NAME} already exists. Skipping."
+          echo "created=false" >> "$GITHUB_OUTPUT"
+        else
+          git tag -a "${TAG_NAME}" -m "skip ci: mobile release ${TAG_NAME} [skip ci]"
+          echo "created=true" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: 'Finalize Outputs'
+      id: finalize
+      shell: bash
+      env:
+        SHOULD_TAG: ${{ steps.changes.outputs.should-tag }}
+        TAG_NAME: ${{ steps.changes.outputs.tag-name }}
+        MATCHED_FILES: ${{ steps.changes.outputs.matched-files }}
+        TAG_CREATED: ${{ steps.create_tag.outputs.created }}
+      run: |
+        set -euo pipefail
+        should="${SHOULD_TAG:-false}"
+        created="${TAG_CREATED:-false}"
+        tag="${TAG_NAME:-}"
+        matched="${MATCHED_FILES:-}"
+        {
+          echo "should-tag=${should}"
+          echo "tag-created=${created}"
+          echo "tag-name=${tag}"
+          echo "matched-files=${matched}"
+        } >> "$GITHUB_OUTPUT"
