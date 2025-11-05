@@ -249,51 +249,73 @@ build-ios env="staging":
         just build-ios-internal "{{env}}"
     fi
 
+# Build iOS app but reuse the login keychain (local convenience)
+build-ios-local env="staging":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    IOS_SIGNING_MODE="login" just build-ios "{{env}}"
+
 # Build iOS app (mirrors actions/ios-build without artifact uploads)
 build-ios-internal env="staging":
     #!/usr/bin/env bash
     set -euo pipefail
 
     SIGNING_KEYCHAIN_PATH=""
+    IOS_SIGNING_MODE_INPUT="${IOS_SIGNING_MODE:-}"
+    if [ -z "$IOS_SIGNING_MODE_INPUT" ] && [ "${SKIP_IOS_SIGNING:-}" = "1" ]; then
+      IOS_SIGNING_MODE_INPUT="skip"
+    fi
+    case "${IOS_SIGNING_MODE_INPUT:-auto}" in
+      auto|login|skip) ;;
+      *)
+        echo "Error: unsupported IOS_SIGNING_MODE '${IOS_SIGNING_MODE_INPUT}'. Expected auto, login, or skip." >&2
+        exit 1
+        ;;
+    esac
+    IOS_SIGNING_MODE_EFFECTIVE="${IOS_SIGNING_MODE_INPUT:-auto}"
+    SIGNING_KEYCHAIN_CREATED=false
+    SIGNING_KEYCHAIN_TOUCHED=false
 
     cleanup_keychain() {
       local exit_code=$1
       set +e
-      if command -v just >/dev/null 2>&1; then
-        just fix-macos-keychain >/dev/null 2>&1 || true
-      else
-        security default-keychain -d user -s login.keychain-db >/dev/null 2>&1 || true
-        security list-keychains -d user -s \
-          "$HOME/Library/Keychains/login.keychain-db" \
-          "/Library/Keychains/System.keychain" >/dev/null 2>&1 || true
-        security unlock-keychain "$HOME/Library/Keychains/login.keychain-db" >/dev/null 2>&1 || true
-      fi
-      local KEYCHAIN_TARGETS=()
-      if [ -n "$SIGNING_KEYCHAIN_PATH" ]; then
-        KEYCHAIN_TARGETS+=("$SIGNING_KEYCHAIN_PATH")
-      fi
-      local TMP_DIR
-      TMP_DIR=$(getconf DARWIN_USER_TEMP_DIR 2>/dev/null || printf '')
-      if [ -n "$TMP_DIR" ]; then
-        KEYCHAIN_TARGETS+=("${TMP_DIR%/}/app-signing.keychain-db")
-      fi
-      [ -n "${RUNNER_TEMP:-}" ] && KEYCHAIN_TARGETS+=("${RUNNER_TEMP%/}/app-signing.keychain-db")
-      # Deduplicate targets
-      local unique_targets=()
-      for kc in "${KEYCHAIN_TARGETS[@]}"; do
-        [ -n "$kc" ] || continue
-        local skip=false
-        for existing in "${unique_targets[@]}"; do
-          if [ "$existing" = "$kc" ]; then
-            skip=true
-            break
-          fi
+      if [ "$IOS_SIGNING_MODE_EFFECTIVE" = "auto" ] && $SIGNING_KEYCHAIN_TOUCHED; then
+        if command -v just >/dev/null 2>&1; then
+          just fix-macos-keychain >/dev/null 2>&1 || true
+        else
+          security default-keychain -d user -s login.keychain-db >/dev/null 2>&1 || true
+          security list-keychains -d user -s \
+            "$HOME/Library/Keychains/login.keychain-db" \
+            "/Library/Keychains/System.keychain" >/dev/null 2>&1 || true
+          security unlock-keychain "$HOME/Library/Keychains/login.keychain-db" >/dev/null 2>&1 || true
+        fi
+        local KEYCHAIN_TARGETS=()
+        if [ -n "$SIGNING_KEYCHAIN_PATH" ]; then
+          KEYCHAIN_TARGETS+=("$SIGNING_KEYCHAIN_PATH")
+        fi
+        local TMP_DIR
+        TMP_DIR=$(getconf DARWIN_USER_TEMP_DIR 2>/dev/null || printf '')
+        if [ -n "$TMP_DIR" ]; then
+          KEYCHAIN_TARGETS+=("${TMP_DIR%/}/app-signing.keychain-db")
+        fi
+        [ -n "${RUNNER_TEMP:-}" ] && KEYCHAIN_TARGETS+=("${RUNNER_TEMP%/}/app-signing.keychain-db")
+        # Deduplicate targets
+        local unique_targets=()
+        for kc in "${KEYCHAIN_TARGETS[@]}"; do
+          [ -n "$kc" ] || continue
+          local skip=false
+          for existing in "${unique_targets[@]}"; do
+            if [ "$existing" = "$kc" ]; then
+              skip=true
+              break
+            fi
+          done
+          $skip || unique_targets+=("$kc")
         done
-        $skip || unique_targets+=("$kc")
-      done
-      for kc in "${unique_targets[@]}"; do
-        [ -f "$kc" ] && security delete-keychain "$kc" >/dev/null 2>&1 || true
-      done
+        for kc in "${unique_targets[@]}"; do
+          [ -f "$kc" ] && security delete-keychain "$kc" >/dev/null 2>&1 || true
+        done
+      fi
       exit "$exit_code"
     }
     trap 'cleanup_keychain $?' EXIT
@@ -321,7 +343,7 @@ build-ios-internal env="staging":
     DEFAULT_APPLICATION_NAME="My App"
     DEFAULT_DEVELOPER_NAME="iPhone Distribution: XXX LLC (XXXXX)"
     DEFAULT_RELEASE_BUILDDIR="/tmp/MyApp/build"
-    DEFAULT_COCOAPODS_VERSION="1.13.0"
+    DEFAULT_COCOAPODS_VERSION="1.12.1"
 
     WORKSPACE=$(read_json workspace);            WORKSPACE=${WORKSPACE:-$DEFAULT_WORKSPACE}
     TARGET_SDK=$(read_json targetSdk);           TARGET_SDK=${TARGET_SDK:-$DEFAULT_TARGET_SDK}
@@ -369,18 +391,6 @@ build-ios-internal env="staging":
 
     # Configure app environment centrally
     just configure-app "{{env}}"
-
-    # Install signing assets via shared recipe
-    KEYCHAIN_TEMP_DIR=$(getconf DARWIN_USER_TEMP_DIR 2>/dev/null || printf '')
-    if [ -z "$KEYCHAIN_TEMP_DIR" ]; then
-      KEYCHAIN_TEMP_DIR="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
-    fi
-    KEYCHAIN_TEMP_DIR=${KEYCHAIN_TEMP_DIR%/}
-    SIGNING_KEYCHAIN_PATH="${KEYCHAIN_TEMP_DIR}/app-signing.keychain-db"
-    IOS_SIGNING_CONFIG_PATH="$IOS_JSON" \
-    IOS_SIGNING_KEYCHAIN_PATH="$SIGNING_KEYCHAIN_PATH" \
-    IOS_SIGNING_KEYCHAIN_NAME="app-signing" \
-    just install-signing
 
     # Enable Corepack and install deps
     corepack enable || true
@@ -466,9 +476,9 @@ build-ios-internal env="staging":
       CP_VERSION=$(RUBYOPT="-rlogger ${RUBYOPT:-}" BUNDLE_GEMFILE="../Gemfile" bundle exec pod --version)
       REQ_CP_VERSION="$COCOAPODS_MIN_VERSION"
       if [ "$(printf '%s\n' "$CP_VERSION" "$REQ_CP_VERSION" | sort -V | head -n1)" != "$REQ_CP_VERSION" ]; then
-        echo "Error: CocoaPods $CP_VERSION is too old. visionOS support requires >= $REQ_CP_VERSION." >&2
+        echo "Error: CocoaPods $CP_VERSION is too old. Require >= $REQ_CP_VERSION for the configured build." >&2
         echo "Update with: BUNDLE_GEMFILE=Gemfile bundle update cocoapods" >&2
-        echo "(Or lower cocoapodsMinVersion in ios.json if visionOS is not required.)" >&2
+        echo "(Or lower cocoapodsMinVersion in ios.json if a newer CocoaPods is unnecessary.)" >&2
         exit 1
       fi
       # Install Pods with retry on checksum mismatches (e.g., boost)
@@ -483,7 +493,7 @@ build-ios-internal env="staging":
         CP_VERSION=$(RUBYOPT="-rlogger ${RUBYOPT:-}" pod --version)
         REQ_CP_VERSION="$COCOAPODS_MIN_VERSION"
         if [ "$(printf '%s\n' "$CP_VERSION" "$REQ_CP_VERSION" | sort -V | head -n1)" != "$REQ_CP_VERSION" ]; then
-          echo "Error: CocoaPods $CP_VERSION is too old. visionOS support requires >= $REQ_CP_VERSION." >&2
+          echo "Error: CocoaPods $CP_VERSION is too old. Require >= $REQ_CP_VERSION for the configured build." >&2
           echo "Update with: gem install cocoapods -v '>= $REQ_CP_VERSION'" >&2
           exit 1
         fi
@@ -497,6 +507,38 @@ build-ios-internal env="staging":
       else
         echo "Error: CocoaPods not found. Install via 'gem install cocoapods' or use Bundler: 'bundle install' then re-run." >&2
         exit 1
+      fi
+    fi
+
+    # Stage signing assets after dependencies are installed
+    if [ "$IOS_SIGNING_MODE_EFFECTIVE" = "skip" ]; then
+      echo "Skipping signing asset installation; assuming login.keychain-db is already configured."
+    else
+      if [ "$IOS_SIGNING_MODE_EFFECTIVE" = "login" ]; then
+        SIGNING_KEYCHAIN_PATH="${IOS_SIGNING_KEYCHAIN_PATH:-$HOME/Library/Keychains/login.keychain-db}"
+        if [ ! -f "$SIGNING_KEYCHAIN_PATH" ]; then
+          echo "Error: login keychain not found at $SIGNING_KEYCHAIN_PATH" >&2
+          exit 1
+        fi
+        SIGNING_KEYCHAIN_CREATED=false
+        SIGNING_KEYCHAIN_TOUCHED=true
+        IOS_SIGNING_CONFIG_PATH="$IOS_JSON" \
+        IOS_SIGNING_KEYCHAIN_PATH="$SIGNING_KEYCHAIN_PATH" \
+        IOS_SIGNING_KEYCHAIN_NAME="$(basename "$SIGNING_KEYCHAIN_PATH" .keychain-db)" \
+        just install-signing
+      else
+        KEYCHAIN_TEMP_DIR=$(getconf DARWIN_USER_TEMP_DIR 2>/dev/null || printf '')
+        if [ -z "$KEYCHAIN_TEMP_DIR" ]; then
+          KEYCHAIN_TEMP_DIR="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
+        fi
+        KEYCHAIN_TEMP_DIR=${KEYCHAIN_TEMP_DIR%/}
+        SIGNING_KEYCHAIN_PATH="${KEYCHAIN_TEMP_DIR}/app-signing.keychain-db"
+        SIGNING_KEYCHAIN_CREATED=true
+        SIGNING_KEYCHAIN_TOUCHED=true
+        IOS_SIGNING_CONFIG_PATH="$IOS_JSON" \
+        IOS_SIGNING_KEYCHAIN_PATH="$SIGNING_KEYCHAIN_PATH" \
+        IOS_SIGNING_KEYCHAIN_NAME="app-signing" \
+        just install-signing
       fi
     fi
 
@@ -687,4 +729,3 @@ fix-macos-keychain:
     echo "Removing temporary signing keychain if it exists..."
     TMP_KC=$(getconf DARWIN_USER_TEMP_DIR 2>/dev/null)app-signing.keychain-db
     [ -f "$TMP_KC" ] && security delete-keychain "$TMP_KC" || true
-
