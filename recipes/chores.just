@@ -20,8 +20,12 @@ sync-app-version:
     import pathlib
     import re
 
-    project_file = pathlib.Path("{{project_pbxproj}}")
-    android_file = pathlib.Path("{{android_build_gradle}}")
+    project_file = pathlib.Path(
+        os.environ.get("PROJECT_PBXPROJ", "{{project_pbxproj}}")
+    )
+    android_file = pathlib.Path(
+        os.environ.get("ANDROID_BUILD_GRADLE", "{{android_build_gradle}}")
+    )
     version = "{{package_version}}"
 
     pattern = r"MARKETING_VERSION = [^;]+;"
