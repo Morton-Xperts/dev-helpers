@@ -276,6 +276,19 @@ configure superuser_password: (configure-local "{{superuser_password}}") (set-en
     # Build and start the Docker containers
     $DOCKER_COMPOSE up --detach --build
 
+    # Wait for the database to be ready
+    @echo "Waiting for PostgreSQL to be ready..."
+    @bash -c 'for i in {1..30}; do \
+        if $DOCKER_COMPOSE exec -T postgres pg_isready -U postgres > /dev/null 2>&1; then \
+            echo "Database is ready."; \
+            exit 0; \
+        fi; \
+        echo "Waiting for database..."; \
+        sleep 2; \
+    done; \
+    echo "Database failed to start in time."; \
+    exit 1'
+
     # Run migrations and create the superuser
     @just -f ../justfile migrate
     @just -f ../justfile seed-backend || echo "Could not seed backend; continuing..."
