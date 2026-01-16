@@ -209,6 +209,45 @@ run-backend-command command:
     @echo "Running custom command: {{command}}"
     $DOCKER_COMPOSE exec web {{command}}
 
+# Tail logs from the web service container
+[working-directory: 'backend']
+tail-web-logs:
+    @echo "Streaming logs from the web container..."
+    $DOCKER_COMPOSE logs -f web
+
+# Stop all running Docker containers
+stop-all-containers:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    running=$(docker ps -q)
+    if [ -z "$running" ]; then
+      echo "No running containers."
+      exit 0
+    fi
+    echo "Stopping all running containers..."
+    docker stop $running
+
+# Show running Docker containers
+list-running-containers:
+    @docker ps
+
+# Stop a running Docker container selected via fzf
+stop-container:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if ! command -v fzf >/dev/null 2>&1; then
+      echo "fzf is required but not installed." >&2
+      exit 1
+    fi
+    selection=$(docker ps --format "{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}" | fzf --prompt="Select container to stop: " || true)
+    if [ -z "$selection" ]; then
+      echo "No container selected."
+      exit 0
+    fi
+    container_id=$(echo "$selection" | awk '{print $1}')
+    echo "Stopping container $container_id..."
+    docker stop "$container_id"
+
 # Change the environment by selecting from available .env files
 change-env: choose-env run-backend
 
