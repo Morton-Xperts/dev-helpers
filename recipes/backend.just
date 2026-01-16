@@ -239,7 +239,8 @@ stop-container:
       echo "fzf is required but not installed." >&2
       exit 1
     fi
-    selection=$(docker ps --format "{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}" | fzf --prompt="Select container to stop: " || true)
+    # Escape Go template braces so `just` doesn't try to interpolate them
+    selection=$(docker ps --format "{{'{{'}}.ID{{'}}'}}\t{{'{{'}}.Names{{'}}'}}\t{{'{{'}}.Image{{'}}'}}\t{{'{{'}}.Status{{'}}'}}" | fzf --prompt="Select container to stop: " || true)
     if [ -z "$selection" ]; then
       echo "No container selected."
       exit 0
