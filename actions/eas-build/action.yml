@@ -1,0 +1,38 @@
+name: 'EAS Build'
+description: Build apps using EAS Build
+
+inputs:
+  expo_token:
+    description: "Expo EAS Token"
+    required: true
+  node_version:
+    description: "Node.js Version"
+    required: false
+    default: "18.x"
+
+runs:
+  using: 'composite'
+  steps:
+    - name: 🏗 Setup Node
+      uses: actions/setup-node@v3
+      with:
+        node-version: ${{ inputs.node_version }}
+        cache: yarn
+
+    - name: 'Enable Corepack'
+      shell: bash
+      run: corepack enable
+
+    - name: Setup EAS
+      uses: expo/expo-github-action@v8
+      with:
+        eas-version: latest
+        token: ${{ inputs.expo_token }}
+
+    - name: 'Install dependencies'
+      shell: bash
+      run: yarn install
+
+    - name: 'Build Apps'
+      shell: bash
+      run: eas build --non-interactive
