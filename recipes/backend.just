@@ -431,7 +431,7 @@ lock-backend python-version="":
       -v "$TMP_VENV_DIR":/app/.venv \
       -w /app \
       python:"$PY_VERSION" \
-      bash -lc "python --version && pip install -q pipenv && PIPENV_VENV_IN_PROJECT=1 pipenv lock --clear"
+      bash -lc "python --version && pip install -q pipenv && PIPENV_VENV_IN_PROJECT=1 pipenv --python python3.8 >/dev/null && /app/.venv/bin/python -m pip install -q 'pip<24.1' && PIPENV_VENV_IN_PROJECT=1 pipenv lock --clear"
     echo "Generated Pipfile.lock for Python $PY_VERSION."
 
 # Collect static files into the STATIC_ROOT directory
