@@ -68,3 +68,76 @@ sync-app-version:
 
     android_file.write_text(gradle_text)
     print("Updated Android versionName and incremented versionCode")
+
+# Generate an Apple CSR using defaults from app.config.js
+apple-csr output_dir=".xperts/dev-helpers/output/apple":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    output_dir="{{output_dir}}"
+    mkdir -p "$output_dir"
+
+    config_file=""
+    for candidate in app.config.ts app.config.js; do
+      if [ -f "$candidate" ]; then
+        config_file="$candidate"
+        break
+      fi
+    done
+
+    app_name=""
+    bundle_id=""
+    if [ -n "$config_file" ]; then
+      if [ "$config_file" = "app.config.ts" ]; then
+        if command -v ts-node >/dev/null 2>&1; then
+          app_name="$(ts-node --transpile-only --compiler-options '{"module":"ESNext"}' -e "import { createRequire } from 'module'; globalThis.require = createRequire(import.meta.url); import config from './app.config.ts'; console.log(config?.default?.name ?? config?.name ?? '')" 2>/dev/null || true)"
+          bundle_id="$(ts-node --transpile-only --compiler-options '{"module":"ESNext"}' -e "import { createRequire } from 'module'; globalThis.require = createRequire(import.meta.url); import config from './app.config.ts'; console.log(config?.default?.ios?.bundleIdentifier ?? config?.ios?.bundleIdentifier ?? '')" 2>/dev/null || true)"
+        fi
+      else
+        app_name="$(node --input-type=module -e "import { createRequire } from 'module'; globalThis.require = createRequire(import.meta.url); const config = (await import('./app.config.js')).default; console.log(config?.name ?? '')" 2>/dev/null || true)"
+        bundle_id="$(node --input-type=module -e "import { createRequire } from 'module'; globalThis.require = createRequire(import.meta.url); const config = (await import('./app.config.js')).default; console.log(config?.ios?.bundleIdentifier ?? '')" 2>/dev/null || true)"
+      fi
+    fi
+
+    if [ -n "$config_file" ] && [ -z "$app_name" ] && [ -z "$bundle_id" ]; then
+      app_name="$(node -e "const fs = require('fs'); const text = fs.readFileSync('app.config.js', 'utf8'); const m = text.match(/\\bname\\s*:\\s*['\\\"]([^'\\\"]+)['\\\"]/); console.log(m ? m[1] : '');" 2>/dev/null || true)"
+      bundle_id="$(node -e "const fs = require('fs'); const text = fs.readFileSync('app.config.js', 'utf8'); const m = text.match(/bundleIdentifier\\s*:\\s*['\\\"]([^'\\\"]+)['\\\"]/); console.log(m ? m[1] : '');" 2>/dev/null || true)"
+    fi
+
+    default_cn="${app_name:-Cured}"
+    default_org="${app_name:-Cured}"
+    default_country="US"
+
+    if [ -n "$config_file" ]; then
+      echo "Defaults from ${config_file}:"
+      echo "  name: ${app_name:-<missing>}"
+      echo "  ios.bundleIdentifier: ${bundle_id:-<missing>}"
+    else
+      echo "No app.config.js or app.config.ts found; using generic defaults."
+    fi
+    echo ""
+
+    read -r -p "Common Name [${default_cn}]: " cn
+    read -r -p "Organization [${default_org}]: " org
+    read -r -p "Country Code (2 letters) [${default_country}]: " country
+    read -r -p "Email (optional): " email
+
+    cn="${cn:-$default_cn}"
+    org="${org:-$default_org}"
+    country="${country:-$default_country}"
+
+    subj="/CN=${cn}/O=${org}/C=${country}"
+    if [ -n "$email" ]; then
+      subj="${subj}/emailAddress=${email}"
+    fi
+
+    key_path="${output_dir}/apple.key"
+    csr_path="${output_dir}/apple.csr"
+
+    openssl genrsa -out "$key_path" 2048
+    openssl req -new -key "$key_path" -out "$csr_path" -subj "$subj"
+
+    echo ""
+    echo "CSR created:"
+    echo "  Key: ${key_path}"
+    echo "  CSR: ${csr_path}"
