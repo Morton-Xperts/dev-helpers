@@ -87,6 +87,42 @@ test-app:
     @echo "Running React Native app tests..."
     npx jest --runInBand
 
+# Build all platforms via EAS (Expo projects only)
+build-mobile:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    is_expo_project() {
+      if [ -f eas.json ] || [ -f app.json ] || [ -f app.config.js ] || [ -f app.config.json ]; then
+        return 0
+      fi
+      if [ -f package.json ]; then
+        if command -v node >/dev/null 2>&1; then
+          node -e "const p=require('./package.json');process.exit((p.dependencies&&p.dependencies.expo)||(p.devDependencies&&p.devDependencies.expo)?0:1)" 2>/dev/null
+          return $?
+        fi
+        if grep -q "\"expo\"" package.json; then
+          return 0
+        fi
+      fi
+      return 1
+    }
+
+    if ! is_expo_project; then
+      echo "Error: build-mobile uses EAS and requires an Expo project." >&2
+      exit 1
+    fi
+
+    PROFILE_INPUT=""
+    read -r -p "Enter EAS build profile (default: production): " PROFILE_INPUT
+    PROFILE="${PROFILE_INPUT:-production}"
+    AUTO_SUBMIT_FLAG=""
+    read -r -p "Auto-submit to app stores after build? (Y/n) " AUTO_SUBMIT
+    if [[ "${AUTO_SUBMIT:-y}" =~ ^[Yy]$ ]]; then
+      AUTO_SUBMIT_FLAG="--auto-submit"
+    fi
+    npx eas build --platform all --profile "${PROFILE}" $AUTO_SUBMIT_FLAG
+
 # Compare mobile config JSON files with their schema counterparts
 compare-config-schemas:
     #!/usr/bin/env python3

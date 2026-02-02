@@ -240,6 +240,36 @@ build-ios env="staging":
     #!/usr/bin/env bash
     set -euo pipefail
 
+    is_expo_project() {
+      if [ -f eas.json ] || [ -f app.json ] || [ -f app.config.js ] || [ -f app.config.json ]; then
+        return 0
+      fi
+      if [ -f package.json ]; then
+        if command -v node >/dev/null 2>&1; then
+          node -e "const p=require('./package.json');process.exit((p.dependencies&&p.dependencies.expo)||(p.devDependencies&&p.devDependencies.expo)?0:1)" 2>/dev/null
+          return $?
+        fi
+        if grep -q "\"expo\"" package.json; then
+          return 0
+        fi
+      fi
+      return 1
+    }
+
+    if is_expo_project; then
+      echo "Expo project detected; using EAS build for iOS..."
+      PROFILE_INPUT=""
+      read -r -p "Enter EAS build profile (default: production): " PROFILE_INPUT
+      PROFILE="${PROFILE_INPUT:-production}"
+      AUTO_SUBMIT_FLAG=""
+      read -r -p "Auto-submit to app stores after build? (Y/n) " AUTO_SUBMIT
+      if [[ "${AUTO_SUBMIT:-y}" =~ ^[Yy]$ ]]; then
+        AUTO_SUBMIT_FLAG="--auto-submit"
+      fi
+      npx eas build --platform ios --profile "${PROFILE}" $AUTO_SUBMIT_FLAG
+      exit 0
+    fi
+
     # Check if repo-specific override exists by trying to call it
     if just --justfile {{justfile()}} --summary 2>/dev/null | tr ' ' '\n' | grep -q "^build-ios-for-repo$"; then
         echo "Using repo-specific iOS build recipe..."
