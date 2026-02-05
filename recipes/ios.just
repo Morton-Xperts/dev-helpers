@@ -235,6 +235,12 @@ run-ios-internal:
     @echo "Running iOS app..."
     NODE_OPTIONS="--openssl-legacy-provider" npx react-native run-ios
 
+# Run iOS app via Expo prebuild workflow
+prebuild-ios:
+    @echo "Running iOS app (Expo prebuild)..."
+    npx expo prebuild
+    npx expo run:ios --device
+
 # Build iOS app (checks for -for-repo override, delegates appropriately)
 build-ios env="staging":
     #!/usr/bin/env bash

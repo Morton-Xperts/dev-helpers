@@ -124,6 +124,12 @@ run-android-internal:
     @echo "Running Android app..."
     NODE_OPTIONS="--openssl-legacy-provider" npx react-native run-android
 
+# Run Android app via Expo prebuild workflow
+prebuild-android:
+    @echo "Running Android app (Expo prebuild)..."
+    npx expo prebuild
+    npx expo run:android --device
+
 # Build Android app
 build-android-internal env="staging":
     #!/usr/bin/env bash
