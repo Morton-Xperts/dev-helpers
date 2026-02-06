@@ -239,7 +239,7 @@ run-ios-internal:
 prebuild-ios:
     @echo "Running iOS app (Expo prebuild)..."
     npx expo prebuild
-    npx expo run:ios --device
+    npx expo run:ios --device "iPhone 17 Pro"
 
 # Build iOS app (checks for -for-repo override, delegates appropriately)
 build-ios env="staging":
