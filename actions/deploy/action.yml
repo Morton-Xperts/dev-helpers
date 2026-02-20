@@ -44,6 +44,11 @@ inputs:
     description: 'The resource group of the Azure Web App'
     required: true
 
+  enforce-production-db-validation:
+    description: 'If true, validates backend/.env production DATABASE_URL safety checks before build'
+    required: false
+    default: 'false'
+
 runs:
   using: "composite"
 
@@ -59,6 +64,27 @@ runs:
       shell: bash
       run: |
         cp backend/.env.${{ inputs.environment }} backend/.env
+
+    - name: 'Validate Production Database Host'
+      if: ${{ inputs.environment == 'production' && inputs.enforce-production-db-validation == 'true' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ ! -f backend/.env ]; then
+          echo "::error::backend/.env was not found after environment file copy."
+          exit 1
+        fi
+
+        db_url_count="$(grep -c '^DATABASE_URL=' backend/.env || true)"
+        if [ "$db_url_count" -ne 1 ]; then
+          echo "::error::Expected exactly one DATABASE_URL in backend/.env for production, found $db_url_count."
+          exit 1
+        fi
+
+        if grep -Eq '^DATABASE_URL=.*@postgres([:/]|$)' backend/.env; then
+          echo "::error::Invalid production DATABASE_URL host detected: 'postgres' is only valid for local docker-compose networking."
+          exit 1
+        fi
 
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
