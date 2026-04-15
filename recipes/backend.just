@@ -400,6 +400,13 @@ create-superuser username email:
     $DOCKER_COMPOSE exec web python3 manage.py createsuperuser --username "{{username}}" --email "{{email}}"
     @echo "Superuser created."
 
+# Reset a user's password by email using the custom Django management command
+[working-directory: 'backend']
+change-password email password:
+    @echo "Updating password for {{email}}..."
+    $DOCKER_COMPOSE exec web python3 manage.py customchangepassword --email "{{email}}" --password "{{password}}"
+    @echo "Password updated."
+
 # Regenerate Pipfile.lock inside a Python container
 [working-directory: 'backend']
 lock-backend python-version="":
