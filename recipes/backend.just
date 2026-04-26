@@ -1,6 +1,6 @@
 #/!/usr/bin/env just
 
-export DOCKER_COMPOSE := "docker compose -f docker-compose.yml -f docker-compose.override.yml"
+export DOCKER_COMPOSE := `docker compose version >/dev/null 2>&1 && printf '%s' 'docker compose -f docker-compose.yml -f docker-compose.override.yml' || printf '%s' 'docker-compose -f docker-compose.yml -f docker-compose.override.yml'`
 
 # Squish database migrations
 [working-directory: 'backend']
