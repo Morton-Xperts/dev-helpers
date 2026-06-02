@@ -1,3 +1,5 @@
 /.idea/
 node_modules/**
 .DS_Store
+/scripts/azure-costs/util.tsv
+/scripts/azure-costs/util_failures.tsv

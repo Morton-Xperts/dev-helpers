@@ -9,6 +9,198 @@ login-azure:
       --password "$AZURE_CLIENT_SECRET" \
       --tenant "$AZURE_TENANT_ID"
 
+list-resource-group-monthly-costs timeframe="MonthToDate":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    if ! command -v az >/dev/null 2>&1; then
+      echo "Azure CLI is required. Install it with: brew install azure-cli" >&2
+      exit 1
+    fi
+
+    if ! command -v jq >/dev/null 2>&1; then
+      echo "jq is required. Install it with: brew install jq" >&2
+      exit 1
+    fi
+
+    client_id="${XP_AZ_AZURE_CLIENT_ID:-${AZURE_CLIENT_ID:-}}"
+    client_name="${XP_AZ_AZURE_CLIENT_NAME:-${AZURE_CLIENT_NAME:-}}"
+    client_secret="${XP_AZ_AZURE_CLIENT_SECRET:-${AZURE_CLIENT_SECRET:-}}"
+    tenant_id="${XP_AZ_AZURE_TENANT_ID:-${AZURE_TENANT_ID:-}}"
+    subscription_id="${XP_AZ_AZURE_SUBSCRIPTION_ID:-${AZURE_SUBSCRIPTION_ID:-}}"
+    timeframe="{{timeframe}}"
+    max_attempts="${AZURE_COST_QUERY_MAX_ATTEMPTS:-8}"
+    retry_delay_seconds="${AZURE_COST_QUERY_RETRY_DELAY_SECONDS:-10}"
+    retry_max_delay_seconds="${AZURE_COST_QUERY_RETRY_MAX_DELAY_SECONDS:-120}"
+    page_delay_seconds="${AZURE_COST_QUERY_PAGE_DELAY_SECONDS:-2}"
+
+    if [ -z "$client_id" ]; then
+      echo "XP_AZ_AZURE_CLIENT_ID or AZURE_CLIENT_ID is required" >&2
+      exit 1
+    fi
+
+    if [ -z "$client_secret" ]; then
+      echo "XP_AZ_AZURE_CLIENT_SECRET or AZURE_CLIENT_SECRET is required" >&2
+      exit 1
+    fi
+
+    if [ -z "$tenant_id" ]; then
+      echo "XP_AZ_AZURE_TENANT_ID or AZURE_TENANT_ID is required" >&2
+      exit 1
+    fi
+
+    if [ -z "$subscription_id" ]; then
+      echo "XP_AZ_AZURE_SUBSCRIPTION_ID or AZURE_SUBSCRIPTION_ID is required" >&2
+      exit 1
+    fi
+
+    if [ -z "$timeframe" ]; then
+      echo "timeframe argument is required. Example: MonthToDate or TheLastMonth" >&2
+      exit 1
+    fi
+
+    az_rest_cost_query() {
+      local request_url="$1"
+      local attempt=1
+      local response=""
+      local status=0
+      local sleep_seconds=0
+
+      while true; do
+        if response="$(az rest \
+          --method post \
+          --url "$request_url" \
+          --headers Content-Type=application/json \
+          --body "$cost_query" \
+          --only-show-errors \
+          --output json 2>&1)"; then
+          printf '%s' "$response"
+          return 0
+        else
+          status=$?
+        fi
+
+        if ! printf '%s' "$response" | grep -qiE 'Too Many Requests|"code"[[:space:]]*:[[:space:]]*"429"|(^|[^0-9])429([^0-9]|$)'; then
+          printf '%s\n' "$response" >&2
+          return "$status"
+        fi
+
+        if [ "$attempt" -ge "$max_attempts" ]; then
+          echo "Azure Cost Management returned 429 after $attempt attempts." >&2
+          printf '%s\n' "$response" >&2
+          return "$status"
+        fi
+
+        sleep_seconds=$((retry_delay_seconds * attempt))
+        if [ "$sleep_seconds" -gt "$retry_max_delay_seconds" ]; then
+          sleep_seconds="$retry_max_delay_seconds"
+        fi
+
+        echo "Azure Cost Management throttled the request (429). Retrying in ${sleep_seconds}s..." >&2
+        sleep "$sleep_seconds"
+        attempt=$((attempt + 1))
+      done
+    }
+
+    principal_label="$client_id"
+    if [ -n "$client_name" ]; then
+      principal_label="$client_name ($client_id)"
+    fi
+
+    echo "Logging in to Azure as $principal_label..."
+    az login \
+      --service-principal \
+      --username "$client_id" \
+      --password "$client_secret" \
+      --tenant "$tenant_id" \
+      --only-show-errors \
+      >/dev/null
+
+    az account set --subscription "$subscription_id"
+
+    cost_query="$(jq -n --arg timeframe "$timeframe" '{
+      type: "Usage",
+      timeframe: $timeframe,
+      dataset: {
+        granularity: "None",
+        aggregation: {
+          totalCost: {
+            name: "PreTaxCost",
+            function: "Sum"
+          }
+        },
+        grouping: [
+          {
+            type: "Dimension",
+            name: "ResourceGroup"
+          }
+        ]
+      }
+    }')"
+
+    resource_groups_file="$(mktemp)"
+    cost_rows_file="$(mktemp)"
+    trap 'rm -f "$resource_groups_file" "$cost_rows_file" "$cost_rows_file.tmp"' EXIT
+
+    az group list \
+      --subscription "$subscription_id" \
+      --query '[].{name:name, location:location}' \
+      --output json \
+      > "$resource_groups_file"
+
+    printf '[]' > "$cost_rows_file"
+
+    url="https://management.azure.com/subscriptions/$subscription_id/providers/Microsoft.CostManagement/query?api-version=2025-03-01"
+    while [ -n "$url" ] && [ "$url" != "null" ]; do
+      response="$(az_rest_cost_query "$url")"
+
+      if [ -z "$response" ]; then
+        break
+      fi
+
+      rows="$(printf '%s' "$response" | jq -c '.properties.rows // []')"
+      jq --argjson rows "$rows" '. + $rows' "$cost_rows_file" > "$cost_rows_file.tmp"
+      mv "$cost_rows_file.tmp" "$cost_rows_file"
+
+      url="$(printf '%s' "$response" | jq -r '.properties.nextLink // empty')"
+      if [ -n "$url" ] && [ "$url" != "null" ] && [ "$page_delay_seconds" -gt 0 ]; then
+        sleep "$page_delay_seconds"
+      fi
+    done
+
+    jq -n \
+      --arg timeframe "$timeframe" \
+      --slurpfile resourceGroups "$resource_groups_file" \
+      --slurpfile costRows "$cost_rows_file" '
+      def key($name): ($name // "" | ascii_downcase);
+      def money: ((. * 100 | round) / 100);
+
+      (reduce (($costRows[0] // [])[]) as $row (
+          {};
+          (key($row[1])) as $resourceGroupKey
+          | .[$resourceGroupKey] = {
+            cost: ((.[$resourceGroupKey].cost // 0) + (($row[0] // 0) | tonumber)),
+            currency: ($row[2] // .[$resourceGroupKey].currency // "")
+          }
+        )) as $costs
+      | ($resourceGroups[0] // [])
+      | map({
+          resourceGroup: .name,
+          location: .location,
+          timeframe: $timeframe,
+          monthlyCost: (($costs[key(.name)].cost // 0) | money),
+          currency: ($costs[key(.name)].currency // "")
+        })
+      | sort_by(.resourceGroup | ascii_downcase)
+      ' | jq -r '
+        if length == 0 then
+          "No resource groups found."
+        else
+          (["ResourceGroup", "Location", "Timeframe", "MonthlyCost", "Currency"] | @tsv),
+          (.[] | [.resourceGroup, .location, .timeframe, (.monthlyCost | tostring), .currency] | @tsv)
+        end
+      ' | column -t -s $'\t'
+
 deactivate-container-app revision container-app="" resource-group="":
     #!/usr/bin/env bash
     echo "Deactivating: container app revision..."
@@ -320,3 +512,11 @@ test-azure-ci-service-principal app-id client-secret tenant:
     az account show \
       --query '{subscriptionId:id, name:name, tenantId:tenantId, user:user.name}' \
       -o json
+
+
+
+  echo $XP_AZ_AZURE_CLIENT_ID
+  echo $XP_AZ_AZURE_CLIENT_NAME
+  echo $XP_AZ_AZURE_CLIENT_SECRET
+  echo $XP_AZ_AZURE_TENANT_ID
+  echo $XP_AZ_AZURE_SUBSCRIPTION_ID
