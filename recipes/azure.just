@@ -512,11 +512,3 @@ test-azure-ci-service-principal app-id client-secret tenant:
     az account show \
       --query '{subscriptionId:id, name:name, tenantId:tenantId, user:user.name}' \
       -o json
-
-
-
-  echo $XP_AZ_AZURE_CLIENT_ID
-  echo $XP_AZ_AZURE_CLIENT_NAME
-  echo $XP_AZ_AZURE_CLIENT_SECRET
-  echo $XP_AZ_AZURE_TENANT_ID
-  echo $XP_AZ_AZURE_SUBSCRIPTION_ID
